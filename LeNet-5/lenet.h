@@ -34,7 +34,7 @@ typedef struct LeNet5
 	double weight2_3[LAYER2][LAYER3][LENGTH_KERNEL0][LENGTH_KERNEL0];
 	double weight3_4[LAYER3][LENGTH_SAMPLE][LENGTH_SAMPLE];
 	double weight4_5[LAYER4][LAYER5][LENGTH_KERNEL1][LENGTH_KERNEL1];
-	double weight5_6[LAYER5][LAYER6][LENGTH_FEATURE5][LENGTH_FEATURE5];
+	double weight5_6[LAYER5 * LENGTH_FEATURE6 * LENGTH_FEATURE6][LAYER6];
 
 	double bias0_1[LAYER1];
 	double bias1_2[LAYER2];
@@ -53,7 +53,7 @@ typedef struct Feature
 	double value3[LAYER3][LENGTH_FEATURE3][LENGTH_FEATURE3];
 	double value4[LAYER4][LENGTH_FEATURE4][LENGTH_FEATURE4];
 	double value5[LAYER5][LENGTH_FEATURE5][LENGTH_FEATURE5];
-	double value6[LAYER6][LENGTH_FEATURE6][LENGTH_FEATURE6];
+	double value6[LAYER6];
 }Feature;
 
 void TrainBatch(LeNet5 *lenet, image *input, uint8 *result, int batchSize);
