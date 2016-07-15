@@ -120,7 +120,7 @@ void foo()
 	int right = testing(lenet, test_data, test_label, COUNT_TEST);
 	printf("%d/%d\n", right, COUNT_TEST);
 	printf("Time:%u\n", (unsigned)(clock() - start));
-	//save(lenet, LENET_FILE);
+	save(lenet, LENET_FILE);
 	free(lenet);
 	free(train_data);
 	free(train_label);
