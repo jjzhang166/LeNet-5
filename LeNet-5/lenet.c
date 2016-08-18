@@ -1,6 +1,7 @@
 ﻿#include "lenet.h"
 #include <math.h>
 #include <memory.h>
+#include <float.h>
 #include <omp.h>
 
 /*
@@ -60,26 +61,6 @@ const static char label[LAYER7][LAYER6] =
 					(output)[i0 + w0][i1 + w1] += (input)[i0][i1] * (weight)[w0][w1];	\
 }
 
-#define SUBSAMPLING_VALID(input,output,weight)																					\
-{																																\
-	FOREACH(o0,GETLENGTH(output))																								\
-		FOREACH(o1,GETLENGTH(*(output)))																						\
-			FOREACH(w0,GETLENGTH(weight))																						\
-				FOREACH(w1,GETLENGTH(*(weight)))																				\
-					(output)[o0][o1] += (input)[o0 * GETLENGTH(weight) + w0][o1 * GETLENGTH(*weight) + w1] * (weight)[w0][w1];	\
-}
-
-#define SUBSAMPLING_FULL(input,output,weight)																					\
-{																																\
-	FOREACH(i0,GETLENGTH(input))																								\
-		FOREACH(i1,GETLENGTH(*(input)))																							\
-			FOREACH(w0,GETLENGTH(weight))																						\
-				FOREACH(w1,GETLENGTH(*(weight)))																				\
-					(output)[i0 * GETLENGTH(weight) + w0][i1 * GETLENGTH(*weight) + w1] += (input)[i0][i1] * (weight)[w0][w1];	\
-}
-
-
-
 #define CONVOLUTION_FORWARD(input,output,weight,bias,action)					\
 {																				\
 	for (int x = 0; x < GETLENGTH(weight); ++x)									\
@@ -105,26 +86,81 @@ const static char label[LAYER7][LAYER6] =
 			CONVOLUTE_VALID(input[x], wd[x][y], outerror[y]);				\
 }
 
-#define SUBSAMPLING_FORWARD(input,output,weight,bias,action)					\
-{																				\
-	for (int x = 0; x < GETLENGTH(weight); ++x)									\
-		SUBSAMPLING_VALID(input[x], output[x], weight[x]);						\
-	FOREACH(j, GETLENGTH(output))												\
-		FOREACH(i, GETCOUNT(output[j]))											\
-		((double *)output[j])[i] = action(((double *)output[j])[i] + bias[j]);	\
+
+//#define SUBSAMP_MAX_FORWARD(input,output)						\
+//{																\
+//	const int len0 = GETLENGTH(*(input))/GETLENGTH(*(output));	\
+//	const int len1 = GETLENGTH(**(input))/GETLENGTH(**(output));\
+//	FOREACH(i,GETLENGTH(output))								\
+//	FOREACH(o0,GETLENGTH((*(output))))							\
+//		FOREACH(o1,GETLENGTH(**(output)))						\
+//	{															\
+//		double max = DBL_MIN;									\
+//		FOREACH(w0,len0)										\
+//			FOREACH(w1,len1)									\
+//				if(max < input[i][o0*len0+w0][o1*len1+w1])		\
+//					max = input[i][o0*len0+w0][o1*len1+w1];		\
+//		output[i][o0][o1] = max;								\
+//	}															\
+//}
+
+
+
+//#define SUBSAMP_MAX_BACKWARD(input,inerror,outerror,output)						\
+//{																					\
+//	const int len0 = GETLENGTH(*(input))/GETLENGTH(*(output));						\
+//	const int len1 = GETLENGTH(**(input))/GETLENGTH(**(output));					\
+//	FOREACH(i,GETLENGTH(output))													\
+//	FOREACH(o0,GETLENGTH((*(output))))												\
+//		FOREACH(o1,GETLENGTH(**(output)))											\
+//		FOREACH(w0,len0)															\
+//			FOREACH(w1,len1)														\
+//					if(output[i][o0][o1] == input[i][o0*len0+w0][o1*len1+w1])		\
+//					{																\
+//						inerror[i][o0*len0+w0][o1*len1+w1] = outerror[i][o0][o1];	\
+//						w0 = len0;													\
+//						break;														\
+//					}																\
+//}
+
+#define SUBSAMP_MAX_FORWARD(input,output)														\
+{																								\
+	const int len0 = GETLENGTH(*(input)) / GETLENGTH(*(output));								\
+	const int len1 = GETLENGTH(**(input)) / GETLENGTH(**(output));								\
+	FOREACH(i, GETLENGTH(output))																\
+	FOREACH(o0, GETLENGTH(*(output)))															\
+	FOREACH(o1, GETLENGTH(**(output)))															\
+	{																							\
+		int x0 = 0, x1 = 0, ismax;																\
+		FOREACH(l0, len0)																		\
+			FOREACH(l1, len1)																	\
+		{																						\
+			ismax = input[i][o0*len0 + l0][o1*len1 + l1] > input[i][o0*len0 + x0][o1*len1 + x1];\
+			x0 += ismax * (l0 - x0);															\
+			x1 += ismax * (l1 - x1);															\
+		}																						\
+		output[i][o0][o1] = input[i][o0*len0 + x0][o1*len1 + x1];								\
+	}																							\
 }
 
-#define SUBSAMPLING_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)\
-{																			\
-	for (int x = 0; x < GETLENGTH(weight); ++x)								\
-		SUBSAMPLING_FULL(outerror[x], inerror[x], weight[x]);				\
-	FOREACH(i, GETCOUNT(inerror))											\
-		((double *)inerror)[i] *= actiongrad(((double *)input)[i]);			\
-	FOREACH(j, GETLENGTH(outerror))											\
-		FOREACH(i, GETCOUNT(outerror[j]))									\
-		bd[j] += ((double *)outerror[j])[i];								\
-	for (int x = 0; x < GETLENGTH(weight); ++x)								\
-		SUBSAMPLING_VALID(input[x], wd[x], outerror[x]);					\
+#define SUBSAMP_MAX_BACKWARD(input,inerror,outerror,output)										\
+{																								\
+	const int len0 = GETLENGTH(*(input)) / GETLENGTH(*(output));								\
+	const int len1 = GETLENGTH(**(input)) / GETLENGTH(**(output));								\
+	FOREACH(i, GETLENGTH(output))																\
+	FOREACH(o0, GETLENGTH(*(output)))															\
+	FOREACH(o1, GETLENGTH(**(output)))															\
+	{																							\
+		int x0 = 0, x1 = 0, ismax;																\
+		FOREACH(l0, len0)																		\
+			FOREACH(l1, len1)																	\
+		{																						\
+			ismax = input[i][o0*len0 + l0][o1*len1 + l1] > input[i][o0*len0 + x0][o1*len1 + x1];\
+			x0 += ismax * (l0 - x0);															\
+			x1 += ismax * (l1 - x1);															\
+		}																						\
+		inerror[i][o0*len0 + x0][o1*len1 + x1] = outerror[i][o0][o1];							\
+	}																							\
 }
 
 #define FULLCONNECT_FORWARD(input,output,weight,bias,action)				\
@@ -172,9 +208,9 @@ static void normalize(uint8 input[],double output[],int count)
 static void forward(LeNet5 *lenet, Feature *features, double(*action)(double))
 {
 	CONVOLUTION_FORWARD(features->value0, features->value1, lenet->weight0_1, lenet->bias0_1, action);
-	SUBSAMPLING_FORWARD(features->value1, features->value2, lenet->weight1_2, lenet->bias1_2, action);
+	SUBSAMP_MAX_FORWARD(features->value1, features->value2);
 	CONVOLUTION_FORWARD(features->value2, features->value3, lenet->weight2_3, lenet->bias2_3, action);
-	SUBSAMPLING_FORWARD(features->value3, features->value4, lenet->weight3_4, lenet->bias3_4, action);
+	SUBSAMP_MAX_FORWARD(features->value3, features->value4);
 	CONVOLUTION_FORWARD(features->value4, features->value5, lenet->weight4_5, lenet->bias4_5, action);
 	FULLCONNECT_FORWARD(features->value5, features->value6, lenet->weight5_6, lenet->bias5_6, action);
 }
@@ -183,9 +219,9 @@ static void backward(LeNet5 *lenet, LeNet5 *deltas, Feature *errors, Feature *fe
 {
 	FULLCONNECT_BACKWARD(features->value5, errors->value5, errors->value6, lenet->weight5_6, deltas->weight5_6, deltas->bias5_6, actiongrad);
 	CONVOLUTION_BACKWARD(features->value4, errors->value4, errors->value5, lenet->weight4_5, deltas->weight4_5, deltas->bias4_5, actiongrad);
-	SUBSAMPLING_BACKWARD(features->value3, errors->value3, errors->value4, lenet->weight3_4, deltas->weight3_4, deltas->bias3_4, actiongrad);
+	SUBSAMP_MAX_BACKWARD(features->value3, errors->value3, errors->value4, features->value4);
 	CONVOLUTION_BACKWARD(features->value2, errors->value2, errors->value3, lenet->weight2_3, deltas->weight2_3, deltas->bias2_3, actiongrad);
-	SUBSAMPLING_BACKWARD(features->value1, errors->value1, errors->value2, lenet->weight1_2, deltas->weight1_2, deltas->bias1_2, actiongrad);
+	SUBSAMP_MAX_BACKWARD(features->value1, errors->value1, errors->value2, features->value2);
 	CONVOLUTION_BACKWARD(features->value0, errors->value0, errors->value1, lenet->weight0_1, deltas->weight0_1, deltas->bias0_1, actiongrad);
 }
 
@@ -206,7 +242,7 @@ static uint8 get_result(Feature *features)
 {
 	double *output = (double *)features->value6;
 	int result = -1;
-	double minvalue = 1e+300;
+	double minvalue = DBL_MAX;
 	FOREACH(i, GETLENGTH(label))
 	{
 		double sum = 0;
@@ -270,10 +306,8 @@ uint8 Predict(LeNet5 *lenet, image input)
 void Initial(LeNet5 *lenet, double(*rand)())
 {
 	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->bias0_1; *pos++ = rand());
-	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->weight1_2; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (LAYER0 + LAYER1))));
-	for (double *pos = (double *)lenet->weight1_2; pos < (double *)lenet->weight2_3; *pos++ *= sqrt(6.0 / (LENGTH_SAMPLE * LENGTH_SAMPLE * (LAYER1 + LAYER2))));
-	for (double *pos = (double *)lenet->weight2_3; pos < (double *)lenet->weight3_4; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (LAYER2 + LAYER3))));
-	for (double *pos = (double *)lenet->weight3_4; pos < (double *)lenet->weight4_5; *pos++ *= sqrt(6.0 / (LENGTH_SAMPLE * LENGTH_SAMPLE * (LAYER3 + LAYER4))));
+	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->weight2_3; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (LAYER0 + LAYER1))));
+	for (double *pos = (double *)lenet->weight2_3; pos < (double *)lenet->weight4_5; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (LAYER2 + LAYER3))));
 	for (double *pos = (double *)lenet->weight4_5; pos < (double *)lenet->weight5_6; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL1 * LENGTH_KERNEL1 * (LAYER4 + LAYER5))));
 	for (double *pos = (double *)lenet->weight5_6; pos < (double *)lenet->bias0_1; *pos++ *= sqrt(6.0 / (LAYER5 + LAYER6)));
 	for (int *pos = (int *)lenet->bias0_1; pos < (int *)(lenet + 1); *pos++ = 0);
