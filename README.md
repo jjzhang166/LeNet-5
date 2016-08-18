@@ -2,7 +2,7 @@
 
 ### 介绍
 根据YANN LECUN的论文《Gradient-based Learning Applied To Document Recognition》设计的LeNet-5神经网络，C语言写成，不依赖任何第三方库。
-MNIST手写字符集初代训练识别率92%，多代训练识别率98%。
+MNIST手写字符集初代训练识别率97%，多代训练识别率98%。
 
 ### DEMO
 main.c文件为MNIST数据集的识别DEMO，直接编译即可运行，训练集60000张，测试集10000张。
