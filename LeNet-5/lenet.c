@@ -1,4 +1,4 @@
-﻿#include "lenet.h"
+#include "lenet.h"
 #include <math.h>
 #include <memory.h>
 #include <float.h>
@@ -6,7 +6,7 @@
 
 /*
 @author : 范文捷
-@data	: 2016-04-20
+@data    : 2016-04-20
 @note	: 根据Yann Lecun的论文《Gradient-based Learning Applied To Document Recognition》复刻
 @api	:
 
@@ -87,42 +87,6 @@ const static char label[LAYER7][LAYER6] =
 }
 
 
-//#define SUBSAMP_MAX_FORWARD(input,output)						\
-//{																\
-//	const int len0 = GETLENGTH(*(input))/GETLENGTH(*(output));	\
-//	const int len1 = GETLENGTH(**(input))/GETLENGTH(**(output));\
-//	FOREACH(i,GETLENGTH(output))								\
-//	FOREACH(o0,GETLENGTH((*(output))))							\
-//		FOREACH(o1,GETLENGTH(**(output)))						\
-//	{															\
-//		double max = DBL_MIN;									\
-//		FOREACH(w0,len0)										\
-//			FOREACH(w1,len1)									\
-//				if(max < input[i][o0*len0+w0][o1*len1+w1])		\
-//					max = input[i][o0*len0+w0][o1*len1+w1];		\
-//		output[i][o0][o1] = max;								\
-//	}															\
-//}
-
-
-
-//#define SUBSAMP_MAX_BACKWARD(input,inerror,outerror,output)						\
-//{																					\
-//	const int len0 = GETLENGTH(*(input))/GETLENGTH(*(output));						\
-//	const int len1 = GETLENGTH(**(input))/GETLENGTH(**(output));					\
-//	FOREACH(i,GETLENGTH(output))													\
-//	FOREACH(o0,GETLENGTH((*(output))))												\
-//		FOREACH(o1,GETLENGTH(**(output)))											\
-//		FOREACH(w0,len0)															\
-//			FOREACH(w1,len1)														\
-//					if(output[i][o0][o1] == input[i][o0*len0+w0][o1*len1+w1])		\
-//					{																\
-//						inerror[i][o0*len0+w0][o1*len1+w1] = outerror[i][o0][o1];	\
-//						w0 = len0;													\
-//						break;														\
-//					}																\
-//}
-
 #define SUBSAMP_MAX_FORWARD(input,output)														\
 {																								\
 	const int len0 = GETLENGTH(*(input)) / GETLENGTH(*(output));								\
@@ -143,13 +107,13 @@ const static char label[LAYER7][LAYER6] =
 	}																							\
 }
 
-#define SUBSAMP_MAX_BACKWARD(input,inerror,outerror,output)										\
+#define SUBSAMP_MAX_BACKWARD(input,inerror,outerror)											\
 {																								\
-	const int len0 = GETLENGTH(*(input)) / GETLENGTH(*(output));								\
-	const int len1 = GETLENGTH(**(input)) / GETLENGTH(**(output));								\
-	FOREACH(i, GETLENGTH(output))																\
-	FOREACH(o0, GETLENGTH(*(output)))															\
-	FOREACH(o1, GETLENGTH(**(output)))															\
+	const int len0 = GETLENGTH(*(inerror)) / GETLENGTH(*(outerror));							\
+	const int len1 = GETLENGTH(**(inerror)) / GETLENGTH(**(outerror));							\
+	FOREACH(i, GETLENGTH(outerror))																\
+	FOREACH(o0, GETLENGTH(*(outerror)))															\
+	FOREACH(o1, GETLENGTH(**(outerror)))														\
 	{																							\
 		int x0 = 0, x1 = 0, ismax;																\
 		FOREACH(l0, len0)																		\
@@ -219,9 +183,9 @@ static void backward(LeNet5 *lenet, LeNet5 *deltas, Feature *errors, Feature *fe
 {
 	FULLCONNECT_BACKWARD(features->value5, errors->value5, errors->value6, lenet->weight5_6, deltas->weight5_6, deltas->bias5_6, actiongrad);
 	CONVOLUTION_BACKWARD(features->value4, errors->value4, errors->value5, lenet->weight4_5, deltas->weight4_5, deltas->bias4_5, actiongrad);
-	SUBSAMP_MAX_BACKWARD(features->value3, errors->value3, errors->value4, features->value4);
+	SUBSAMP_MAX_BACKWARD(features->value3, errors->value3, errors->value4);
 	CONVOLUTION_BACKWARD(features->value2, errors->value2, errors->value3, lenet->weight2_3, deltas->weight2_3, deltas->bias2_3, actiongrad);
-	SUBSAMP_MAX_BACKWARD(features->value1, errors->value1, errors->value2, features->value2);
+	SUBSAMP_MAX_BACKWARD(features->value1, errors->value1, errors->value2);
 	CONVOLUTION_BACKWARD(features->value0, errors->value0, errors->value1, lenet->weight0_1, deltas->weight0_1, deltas->bias0_1, actiongrad);
 }
 
