@@ -2,7 +2,6 @@
 
 #define LENGTH_KERNEL0	5
 #define LENGTH_KERNEL1	4
-#define LENGTH_SAMPLE	2
 
 #define LENGTH_FEATURE0	28
 #define LENGTH_FEATURE1	24//(LENGTH_INPUT - LENGTH_KERNEL + 1)
@@ -19,7 +18,6 @@
 #define LAYER4			16
 #define LAYER5			120
 #define LAYER6          84
-#define LAYER7          10
 
 #define ALPHA 0.05
 
@@ -43,19 +41,19 @@ typedef struct LeNet5
 
 typedef struct Feature
 {
-	double value0[LAYER0][LENGTH_FEATURE0][LENGTH_FEATURE0];
-	double value1[LAYER1][LENGTH_FEATURE1][LENGTH_FEATURE1];
-	double value2[LAYER2][LENGTH_FEATURE2][LENGTH_FEATURE2];
-	double value3[LAYER3][LENGTH_FEATURE3][LENGTH_FEATURE3];
-	double value4[LAYER4][LENGTH_FEATURE4][LENGTH_FEATURE4];
-	double value5[LAYER5][LENGTH_FEATURE5][LENGTH_FEATURE5];
-	double value6[LAYER6];
+	double input[LAYER0][LENGTH_FEATURE0][LENGTH_FEATURE0];
+	double layer1[LAYER1][LENGTH_FEATURE1][LENGTH_FEATURE1];
+	double layer2[LAYER2][LENGTH_FEATURE2][LENGTH_FEATURE2];
+	double layer3[LAYER3][LENGTH_FEATURE3][LENGTH_FEATURE3];
+	double layer4[LAYER4][LENGTH_FEATURE4][LENGTH_FEATURE4];
+	double layer5[LAYER5][LENGTH_FEATURE5][LENGTH_FEATURE5];
+	double output[LAYER6];
 }Feature;
 
-void TrainBatch(LeNet5 *lenet, image *input, uint8 *result, int batchSize);
+void TrainBatch(LeNet5 *lenet, image *inputs, const char **labels, int batchSize);
 
-void Train(LeNet5 *lenet, image input, uint8 result);
+void Train(LeNet5 *lenet, image input, const char *label);
 
-uint8 Predict(LeNet5 *lenet, image input);
+int Predict(LeNet5 *lenet, image input, const char(*labels)[LAYER6], int count);
 
-void Initial(LeNet5 *lenet, double(*rand)());
+void Initial(LeNet5 *lenet);
