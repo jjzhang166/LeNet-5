@@ -1,30 +1,10 @@
 #include "lenet.h"
-#include <math.h>
 #include <memory.h>
 #include <float.h>
 #include <time.h>
 #include <stdlib.h>
 #include <omp.h>
-
-/*
-@author : 范文捷
-@data    : 2016-04-20
-@note	: 根据Yann Lecun的论文《Gradient-based Learning Applied To Document Recognition》复刻
-@api	:
-
-批量训练
-void TrainBatch(LeNet5 *lenet, LeNet5 deltas[], image *input, uint8 *result, int batchSize);
-
-训练
-void Train(LeNet5 *lenet, image input, uint8 result);
-
-预测
-uint8 Predict(LeNet5 *lenet, Feature *features, image input);
-
-初始化
-void Initial(LeNet5 *lenet, double(*rand)());
-*/
-
+#include <math.h>
 
 #define GETLENGTH(array) (sizeof(array)/sizeof(*(array)))
 
@@ -116,7 +96,7 @@ void Initial(LeNet5 *lenet, double(*rand)());
 	}																							\
 }
 
-#define INNRPRODUCT_FORWARD(input,output,weight,bias,action)				\
+#define DOT_PRODUCT_FORWARD(input,output,weight,bias,action)				\
 {																			\
 	for (int x = 0; x < GETLENGTH(weight); ++x)								\
 		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
@@ -125,7 +105,7 @@ void Initial(LeNet5 *lenet, double(*rand)());
 		((double *)output)[j] = action(((double *)output)[j] + bias[j]);	\
 }
 
-#define INNRPRODUCT_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)	\
+#define DOT_PRODUCT_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)	\
 {																				\
 	for (int x = 0; x < GETLENGTH(weight); ++x)									\
 		for (int y = 0; y < GETLENGTH(*weight); ++y)							\
@@ -165,12 +145,12 @@ static void forward(LeNet5 *lenet, Feature *features, double(*action)(double))
 	CONVOLUTION_FORWARD(features->layer2, features->layer3, lenet->weight2_3, lenet->bias2_3, action);
 	SUBSAMP_MAX_FORWARD(features->layer3, features->layer4);
 	CONVOLUTION_FORWARD(features->layer4, features->layer5, lenet->weight4_5, lenet->bias4_5, action);
-	INNRPRODUCT_FORWARD(features->layer5, features->output, lenet->weight5_6, lenet->bias5_6, action);
+	DOT_PRODUCT_FORWARD(features->layer5, features->output, lenet->weight5_6, lenet->bias5_6, action);
 }
 
 static void backward(LeNet5 *lenet, LeNet5 *deltas, Feature *errors, Feature *features, double(*actiongrad)(double))
 {
-	INNRPRODUCT_BACKWARD(features->layer5, errors->layer5, errors->output, lenet->weight5_6, deltas->weight5_6, deltas->bias5_6, actiongrad);
+	DOT_PRODUCT_BACKWARD(features->layer5, errors->layer5, errors->output, lenet->weight5_6, deltas->weight5_6, deltas->bias5_6, actiongrad);
 	CONVOLUTION_BACKWARD(features->layer4, errors->layer4, errors->layer5, lenet->weight4_5, deltas->weight4_5, deltas->bias4_5, actiongrad);
 	SUBSAMP_MAX_BACKWARD(features->layer3, errors->layer3, errors->layer4);
 	CONVOLUTION_BACKWARD(features->layer2, errors->layer2, errors->layer3, lenet->weight2_3, deltas->weight2_3, deltas->bias2_3, actiongrad);
@@ -192,13 +172,13 @@ static void load_target(Feature *features, Feature *errors, const char *label, d
 		error[i] = (label[i] - output[i])*actiongrad(output[i]);
 }
 
-static int get_result(Feature *features, const char(*labels)[LAYER6], int count)
+static uint8 get_result(Feature *features, const char(*labels)[OUTPUT], uint8 count)
 {
 	double *output = (double *)features->output; 
 	const int outlen = GETCOUNT(features->output);
-	int result = -1;
+	uint8 result = 0;
 	double minvalue = DBL_MAX;
-	FOREACH(i, count)
+	for (uint8 i = 0; i < count; ++i)
 	{
 		double sum = 0;
 		FOREACH(j, outlen)
@@ -229,7 +209,7 @@ static double f64rand()
 }
 
 
-void TrainBatch(LeNet5* lenet, image * inputs, const char **labels, int batchSize)
+void TrainBatch(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT], uint8 *labels, int batchSize)
 {
 	double buffer[GETCOUNT(LeNet5)] = { 0 };
 	int i = 0;
@@ -241,7 +221,7 @@ void TrainBatch(LeNet5* lenet, image * inputs, const char **labels, int batchSiz
 		LeNet5	deltas = { 0 };
 		load_input(&features, inputs[i]);
 		forward(lenet, &features, tanh);
-		load_target(&features, &errors, labels[i], tanhgrad);
+		load_target(&features, &errors, resMat[labels[i]], tanhgrad);
 		backward(lenet, &deltas, &errors, &features, tanhgrad);
 		#pragma omp critical
 		{
@@ -254,33 +234,33 @@ void TrainBatch(LeNet5* lenet, image * inputs, const char **labels, int batchSiz
 		((double *)lenet)[i] += k * buffer[i];
 }
 
-void Train(LeNet5 *lenet, image input, const char *label)
+void Train(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT], uint8 label)
 {
 	Feature features = { 0 };
 	Feature errors = { 0 };
 	LeNet5 deltas = { 0 };
 	load_input(&features, input);
 	forward(lenet, &features, tanh);
-	load_target(&features, &errors, label, tanhgrad);
+	load_target(&features, &errors, resMat[label], tanhgrad);
 	backward(lenet, &deltas, &errors, &features, tanhgrad);
 	FOREACH(i, GETCOUNT(LeNet5))
 		((double *)lenet)[i] += ALPHA * ((double *)&deltas)[i];
 }
 
-int Predict(LeNet5 *lenet, image input, const char (*labels)[LAYER6],int count)
+uint8 Predict(LeNet5 *lenet, image input, const char (*resMat)[OUTPUT],uint8 count)
 {
 	Feature features = { 0 };
 	load_input(&features, input);
 	forward(lenet, &features, tanh);
-	return get_result(&features, labels, count);
+	return get_result(&features, resMat, count);
 }
 
 void Initial(LeNet5 *lenet)
 {
 	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->bias0_1; *pos++ = f64rand());
-	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->weight2_3; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (LAYER0 + LAYER1))));
+	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->weight2_3; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (INPUT + LAYER1))));
 	for (double *pos = (double *)lenet->weight2_3; pos < (double *)lenet->weight4_5; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (LAYER2 + LAYER3))));
 	for (double *pos = (double *)lenet->weight4_5; pos < (double *)lenet->weight5_6; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL1 * LENGTH_KERNEL1 * (LAYER4 + LAYER5))));
-	for (double *pos = (double *)lenet->weight5_6; pos < (double *)lenet->bias0_1; *pos++ *= sqrt(6.0 / (LAYER5 + LAYER6)));
+	for (double *pos = (double *)lenet->weight5_6; pos < (double *)lenet->bias0_1; *pos++ *= sqrt(6.0 / (LAYER5 + OUTPUT)));
 	for (int *pos = (int *)lenet->bias0_1; pos < (int *)(lenet + 1); *pos++ = 0);
 }
