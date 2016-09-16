@@ -1,4 +1,4 @@
-﻿#include "lenet.h"
+#include "lenet.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -109,13 +109,13 @@ void foo()
 	LeNet5 *lenet = (LeNet5 *)malloc(sizeof(LeNet5));
 	if (load(lenet, LENET_FILE))
 		Initial(lenet);
-	clock_t start = clock();
+	clock_t start = time(0);
 	int batches[] = { 300 };
 	for (int i = 0; i < sizeof(batches) / sizeof(*batches);++i)
 		training(lenet, train_data, train_label, batches[i],COUNT_TRAIN);
 	int right = testing(lenet, test_data, test_label, COUNT_TEST);
 	printf("%d/%d\n", right, COUNT_TEST);
-	printf("Time:%u\n", (unsigned)(clock() - start));
+	printf("Time:%u\n", (unsigned)(time(0) - start));
 	//save(lenet, LENET_FILE);
 	free(lenet);
 	free(train_data);

@@ -3,7 +3,8 @@
 #include <float.h>
 #include <time.h>
 #include <stdlib.h>
-#include <omp.h>
+#include <stdalign.h>
+//#include <omp.h>
 #include <math.h>
 
 #define GETLENGTH(array) (sizeof(array)/sizeof(*(array)))
@@ -12,14 +13,81 @@
 
 #define FOREACH(i,count) for (int i = 0; i < count; ++i)
 
-#define CONVOLUTE_VALID(input,output,weight)											\
-{																						\
-	FOREACH(o0,GETLENGTH(output))														\
-		FOREACH(o1,GETLENGTH(*(output)))												\
-			FOREACH(w0,GETLENGTH(weight))												\
-				FOREACH(w1,GETLENGTH(*(weight)))										\
-					(output)[o0][o1] += (input)[o0 + w0][o1 + w1] * (weight)[w0][w1];	\
+//#define CONVOLUTE_VALID(input,output,weight)											\
+//{																						\
+//	FOREACH(o0,GETLENGTH(output))														\
+//		FOREACH(o1,GETLENGTH(*(output)))												\
+//			FOREACH(w0,GETLENGTH(weight))												\
+//				FOREACH(w1,GETLENGTH(*(weight)))										\
+//					(output)[o0][o1] += (input)[o0 + w0][o1 + w1] * (weight)[w0][w1];	\
+//}
+
+
+#define CONVOLUTE_VALID(input,output,weight)                    \
+{                                                               \
+    const double mask[4] = {                                    \
+        (GETLENGTH(*(output))&3)>0,                             \
+        (GETLENGTH(*(output))&3)>1,                             \
+        (GETLENGTH(*(output))&3)>2,                             \
+    };                                                          \
+    asm("vmovdqu (%0), %%ymm3;"::"r"(mask));                    \
+    for(int o0=0;o0<GETLENGTH(output);++o0)                     \
+    {                                                           \
+        for(int o1=0;o1<GETLENGTH(*(output));o1+=4)             \
+        {                                                       \
+            asm("vxorpd %ymm0, %ymm0, %ymm0;");                 \
+            for(int w0=0;w0<GETLENGTH(weight);++w0)             \
+            {                                                   \
+                for(int w1=0;w1<GETLENGTH(*weight);++w1)        \
+                {                                               \
+                    asm("                                       \
+                        vmovdqu         (%0),   %%ymm1;         \
+                        vbroadcastsd    %1,     %%ymm2;         \
+                        vfmadd231pd     %%ymm1, %%ymm2, %%ymm0; \
+                        "::"r"((input)[o0 + w0] + o1 + w1),     \
+                        "m"(weight[w0][w1]):"%ymm0","%ymm3");   \
+                }                                               \
+            }                                                   \
+            if(o1==GETLENGTH(*(output))>>2<<2)                  \
+                asm("vmulpd %ymm3, %ymm0, %ymm0;");             \
+            asm("                                               \
+                vaddpd  (%0),   %%ymm0, %%ymm0;                 \
+                vmovdqu %%ymm0, (%0);                           \
+                "::"r"(output[o0]+o1):"%ymm0");                 \
+        }                                                       \
+    }                                                           \
 }
+
+//#define CONVOLUTE_FULL(input,output,weight)                     \
+//{                                                               \
+//    const double mask[4] = {                                    \
+//        (GETLENGTH(*(input))&3)>0,                              \
+//        (GETLENGTH(*(input))&3)>1,                              \
+//        (GETLENGTH(*(input))&3)>2,                              \
+//    };                                                          \
+//    asm("vmovdqu (%0), %%ymm3;"::"r"(mask));                    \
+//    for(int i0=0;i0<GETLENGTH(input);++i0)                      \
+//    {                                                           \
+//        for(int i1=0;i1<GETLENGTH(*(input));i1+=4)              \
+//        {                                                       \
+//            asm("vmovdqu (%0), %%ymm2;"::"r"(input[i0]+i1));    \
+//            if(i1==GETLENGTH(*(input))>>2<<2)                   \
+//                asm("vmulpd %ymm3, %ymm2, %ymm2;");             \
+//            for(int w0=0;w0<GETLENGTH(weight);++w0)             \
+//            {                                                   \
+//                for(int w1=0;w1<GETLENGTH(*weight);++w1)        \
+//                {                                               \
+//                    asm("                                       \
+//                        vbroadcastsd    %1,     %%ymm1;         \
+//                        vfmadd213pd     (%0),   %%ymm2, %%ymm1; \
+//                        vmovdqu         %%ymm1, (%0);           \
+//                        "::"r"(output[i0 + w0] + i1 + w1),      \
+//                        "m"(weight[w0][w1]):"%ymm2","%ymm3");   \
+//                }                                               \
+//            }                                                   \
+//        }                                                       \
+//    }                                                           \
+//}
 
 #define CONVOLUTE_FULL(input,output,weight)												\
 {																						\
@@ -96,11 +164,47 @@
 	}																							\
 }
 
+#define INNER_PRODUCT(input,output,weight)              \
+{                                                       \
+    const double mask[4] = {                            \
+        GETLENGTH(*weight) > 0,                         \
+        GETLENGTH(*weight) > 1,                         \
+        GETLENGTH(*weight) > 2,                         \
+    };                                                  \
+    asm("vmovdqu (%0), %%ymm3;"::"r"(mask));            \
+    for (int y = 0; y < GETLENGTH(*weight); y+=4)       \
+    {                                                   \
+        asm("vxorpd %ymm0, %ymm0, %ymm0;");             \
+        for (int x = 0; x < GETLENGTH(weight); ++x)     \
+        {                                               \
+            asm("                                       \
+                vbroadcastsd    %0,     %%ymm1;         \
+                vmovupd         (%1),   %%ymm2;         \
+                vfmadd231pd     %%ymm2, %%ymm1, %%ymm0; \
+                "::"m"(((double *)input)[x]),           \
+                "r"(weight[x]+y):"%ymm0","%ymm3");      \
+        }                                               \
+        if(y==GETLENGTH(*weight)>>2<<2)                 \
+            asm("vmulpd %ymm3, %ymm0, %ymm0;");         \
+        asm("                                           \
+            vaddpd  (%0),   %%ymm0, %%ymm0;             \
+            vmovupd %%ymm0, (%0);                       \
+            "::"r"(((double *)output)+y));              \
+    }                                                   \
+}
+
+
+//#define INNER_PRODUCT(input,output,weight)                                  \
+//{																			\
+//	for (int x = 0; x < GETLENGTH(weight); ++x)								\
+//		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
+//			((double *)output)[y] += ((double *)input)[x] * weight[x][y];	\
+//}
+
+
 #define DOT_PRODUCT_FORWARD(input,output,weight,bias,action)				\
 {																			\
-	for (int x = 0; x < GETLENGTH(weight); ++x)								\
-		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
-			((double *)output)[y] += ((double *)input)[x] * weight[x][y];	\
+	INNER_PRODUCT(input,output,weight);                                     \
 	FOREACH(j, GETLENGTH(bias))												\
 		((double *)output)[j] = action(((double *)output)[j] + bias[j]);	\
 }
