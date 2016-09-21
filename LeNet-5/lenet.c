@@ -1,8 +1,7 @@
 #include "lenet.h"
-#include <float.h>
+#include <math.h>
 #include <time.h>
 #include <stdlib.h>
-#include <math.h>
 
 static void vector_x_matrix(double *src,double *mat,double *des,long height,long width);
 static void matrix_x_vector(double *mat,double *src,double *des,long height,long width);
@@ -174,8 +173,10 @@ static uint8 get_result(Feature *features, const char(*labels)[OUTPUT], uint8 co
 	double *output = (double *)features->output;
 	const int outlen = GETCOUNT(features->output);
 	uint8 result = 0;
-	double minvalue = DBL_MAX;
-	for (uint8 i = 0; i < count; ++i)
+	double minvalue = 0;
+    FOREACH(j, outlen)
+    minvalue += (output[j] - labels[0][j])*(output[j] - labels[0][j]);
+	for (uint8 i = 1; i < count; ++i)
 	{
 		double sum = 0;
 		FOREACH(j, outlen)
