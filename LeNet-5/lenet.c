@@ -1,12 +1,9 @@
 #include "lenet.h"
-#include <memory.h>
 #include <float.h>
 #include <time.h>
 #include <stdlib.h>
-#include <stdalign.h>
-//#include <omp.h>
 #include <math.h>
-#include <stdio.h>
+
 static void vector_x_matrix(double *src,double *mat,double *des,long height,long width);
 static void matrix_x_vector(double *mat,double *src,double *des,long height,long width);
 static void scalar_fma_vector(double k,double *src,double *des,long length);
@@ -19,14 +16,11 @@ static void convolute_full(double *src,double *conv,double *des,const long sh,co
 
 #define FOREACH(i,count) for (int i = 0; i < count; ++i)
 
-//#define CONVOLUTE_VALID(input,output,weight)											\
-//{																						\
-//	FOREACH(o0,GETLENGTH(output))														\
-//		FOREACH(o1,GETLENGTH(*(output)))												\
-//			FOREACH(w0,GETLENGTH(weight))												\
-//				FOREACH(w1,GETLENGTH(*(weight)))										\
-//					(output)[o0][o1] += (input)[o0 + w0][o1 + w1] * (weight)[w0][w1];	\
-//}
+#define CONVOLUTE_VALID(input,output,weight)											\
+{																						\
+    convolute_valid((double *)(input),(double *)(weight),(double *)(output),            \
+        GETLENGTH(output),GETLENGTH(*(output)),GETLENGTH(weight),GETLENGTH(*(weight))); \
+}
 
 #define CONVOLUTE_FULL(input,output,weight)												\
 {																						\
@@ -37,52 +31,14 @@ static void convolute_full(double *src,double *conv,double *des,const long sh,co
 					(output)[i0 + w0][i1 + w1] += (input)[i0][i1] * (weight)[w0][w1];	\
 }
 
-//#define CONVOLUTE_VALID(input,output,weight)                    \
-//{                                                               \
-//const double mask[4] = {                                    \
-//(GETLENGTH(*(output))&3)>0,                             \
-//(GETLENGTH(*(output))&3)>1,                             \
-//(GETLENGTH(*(output))&3)>2,                             \
-//};                                                          \
-//asm("vmovdqu (%0), %%ymm3;"::"r"(mask));                    \
-//for(int o0=0;o0<GETLENGTH(output);++o0)                     \
-//{                                                           \
-//for(int o1=0;o1<GETLENGTH(*(output));o1+=4)             \
-//{                                                       \
-//asm("vxorpd %ymm0, %ymm0, %ymm0;");                 \
-//for(int w0=0;w0<GETLENGTH(weight);++w0)             \
-//{                                                   \
-//for(int w1=0;w1<GETLENGTH(*weight);++w1)        \
-//{                                               \
-//asm("                                       \
-//vmovdqu         (%0),   %%ymm1;         \
-//vbroadcastsd    %1,     %%ymm2;         \
-//vfmadd231pd     %%ymm1, %%ymm2, %%ymm0; \
-//"::"r"((input)[o0 + w0] + o1 + w1),     \
-//"m"(weight[w0][w1]):"%ymm0","%ymm3");   \
-//}                                               \
-//}                                                   \
-//if(o1==GETLENGTH(*(output))>>2<<2)                  \
-//asm("vmulpd %ymm3, %ymm0, %ymm0;");             \
-//asm("                                               \
-//vaddpd  (%0),   %%ymm0, %%ymm0;                 \
-//vmovdqu %%ymm0, (%0);                           \
-//"::"r"(output[o0]+o1):"%ymm0");                 \
-//}                                                       \
-//}                                                           \
-//}
-
-
 #define CONVOLUTION_FORWARD(input,output,weight,bias,action)					\
 {																				\
-    for (int x = 0; x < GETLENGTH(weight); ++x)									\
-        for (int y = 0; y < GETLENGTH(*weight); ++y)							\
-            convolute_valid((double *)input[x], (double *)weight[x][y],         \
-                (double *)output[y], GETLENGTH(output[y]),GETLENGTH(*output[y]),\
-                GETLENGTH(weight[x][y]),GETLENGTH(*weight[x][y]));              \
-    FOREACH(j, GETLENGTH(output))												\
-        FOREACH(i, GETCOUNT(output[j]))											\
-        ((double *)output[j])[i] = action(((double *)output[j])[i] + bias[j]);	\
+	for (int x = 0; x < GETLENGTH(weight); ++x)									\
+		for (int y = 0; y < GETLENGTH(*weight); ++y)							\
+			CONVOLUTE_VALID(input[x], output[y], weight[x][y]);					\
+	FOREACH(j, GETLENGTH(output))												\
+		FOREACH(i, GETCOUNT(output[j]))											\
+		((double *)output[j])[i] = action(((double *)output[j])[i] + bias[j]);	\
 }
 
 #define CONVOLUTION_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)\
@@ -97,9 +53,7 @@ static void convolute_full(double *src,double *conv,double *des,const long sh,co
 		bd[j] += ((double *)outerror[j])[i];								\
 	for (int x = 0; x < GETLENGTH(weight); ++x)								\
 		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
-            convolute_valid((double *)input[x], (double *)outerror[y],      \
-            (double *)wd[x][y], GETLENGTH(wd[x][y]),GETLENGTH(*wd[x][y]),   \
-            GETLENGTH(outerror[y]),GETLENGTH(*outerror[y]));                \
+			CONVOLUTE_VALID(input[x], wd[x][y], outerror[y]);				\
 }
 
 
@@ -143,24 +97,24 @@ static void convolute_full(double *src,double *conv,double *des,const long sh,co
 	}																							\
 }
 
-
 #define DOT_PRODUCT_FORWARD(input,output,weight,bias,action)                                                \
 {                                                                                                           \
     vector_x_matrix((double *)input,(double *)weight,(double *)output,GETLENGTH(weight),GETLENGTH(*weight));\
-    FOREACH(j, GETLENGTH(bias))                                                                             \
-        ((double *)output)[j] = action(((double *)output)[j] + bias[j]);                                    \
+	FOREACH(j, GETLENGTH(bias))                                                                             \
+		((double *)output)[j] = action(((double *)output)[j] + bias[j]);                                    \
 }
 
 #define DOT_PRODUCT_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)                                    \
 {                                                                                                               \
     matrix_x_vector((double *)weight,(double *)outerror,(double *)inerror,GETLENGTH(weight),GETLENGTH(*weight));\
-    FOREACH(i, GETCOUNT(inerror))                                                                               \
-        ((double *)inerror)[i] *= actiongrad(((double *)input)[i]);                                             \
-    scalar_fma_vector(1,(double *)outerror,bd,GETLENGTH(outerror));                                             \
-    for (int x = 0; x < GETLENGTH(weight); ++x)                                                                 \
-        scalar_fma_vector(((double *)input)[x],((double *)outerror),wd[x],GETLENGTH(*weight));                  \
+	FOREACH(i, GETCOUNT(inerror))                                                                               \
+		((double *)inerror)[i] *= actiongrad(((double *)input)[i]);                                             \
+	FOREACH(j, GETLENGTH(outerror))                                                                             \
+		bd[j] += ((double *)outerror)[j];                                                                       \
+	for (int x = 0; x < GETLENGTH(weight); ++x)                                                                 \
+		for (int y = 0; y < GETLENGTH(*weight); ++y)                                                            \
+			wd[x][y] += ((double *)input)[x] * ((double *)outerror)[y];                                         \
 }
-
 
 double tanhgrad(double y)
 {
@@ -217,7 +171,7 @@ static void load_target(Feature *features, Feature *errors, const char *label, d
 
 static uint8 get_result(Feature *features, const char(*labels)[OUTPUT], uint8 count)
 {
-	double *output = (double *)features->output; 
+	double *output = (double *)features->output;
 	const int outlen = GETCOUNT(features->output);
 	uint8 result = 0;
 	double minvalue = DBL_MAX;
@@ -233,22 +187,6 @@ static uint8 get_result(Feature *features, const char(*labels)[OUTPUT], uint8 co
 		}
 	}
 	return result;
-}
-
-static double f64rand()
-{
-	static int randbit = 0;
-	if (!randbit)
-	{
-		srand((unsigned)time(0));
-		for (int i = RAND_MAX; i; i >>= 1, ++randbit);
-	}
-	unsigned long long lvalue = 0x4000000000000000L;
-	int i = 52 - randbit;
-	for (; i > 0; i -= randbit)
-		lvalue |= (unsigned long long)rand() << i;
-	lvalue |= (unsigned long long)rand() >> -i;
-	return *(double *)&lvalue - 3;
 }
 
 
@@ -268,10 +206,13 @@ void TrainBatch(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT], uint8
 		backward(lenet, &deltas, &errors, &features, tanhgrad);
 		#pragma omp critical
 		{
-            scalar_fma_vector(1, (double *)&deltas, buffer, GETCOUNT(LeNet5));
+			FOREACH(j, GETCOUNT(LeNet5))
+				buffer[j] += ((double *)&deltas)[j];
 		}
 	}
-    scalar_fma_vector(ALPHA / batchSize, buffer, (double *)lenet, GETCOUNT(LeNet5));
+	double k = ALPHA / batchSize;
+	FOREACH(i, GETCOUNT(LeNet5))
+		((double *)lenet)[i] += k * buffer[i];
 }
 
 void Train(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT], uint8 label)
@@ -283,7 +224,8 @@ void Train(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT], uint8 label)
 	forward(lenet, &features, tanh);
 	load_target(&features, &errors, resMat[label], tanhgrad);
 	backward(lenet, &deltas, &errors, &features, tanhgrad);
-    scalar_fma_vector(ALPHA , (double *)&deltas, (double *)lenet, GETCOUNT(LeNet5));
+	FOREACH(i, GETCOUNT(LeNet5))
+		((double *)lenet)[i] += ALPHA * ((double *)&deltas)[i];
 }
 
 uint8 Predict(LeNet5 *lenet, image input, const char (*resMat)[OUTPUT],uint8 count)
@@ -296,7 +238,8 @@ uint8 Predict(LeNet5 *lenet, image input, const char (*resMat)[OUTPUT],uint8 cou
 
 void Initial(LeNet5 *lenet)
 {
-	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->bias0_1; *pos++ = f64rand());
+    srand((unsigned int)time(0));
+	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->bias0_1; *pos++ = (2.0 / RAND_MAX) * rand() - 1);
 	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->weight2_3; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (INPUT + LAYER1))));
 	for (double *pos = (double *)lenet->weight2_3; pos < (double *)lenet->weight4_5; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (LAYER2 + LAYER3))));
 	for (double *pos = (double *)lenet->weight4_5; pos < (double *)lenet->weight5_6; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL1 * LENGTH_KERNEL1 * (LAYER4 + LAYER5))));
