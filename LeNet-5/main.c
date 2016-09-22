@@ -83,7 +83,6 @@ int load(LeNet5 *lenet, char filename[])
 }
 
 
-
 void foo()
 {
 	image *train_data = (image *)calloc(COUNT_TRAIN, sizeof(image));

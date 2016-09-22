@@ -43,7 +43,6 @@ void Initial(LeNet5 *lenet);
 typedef unsigned char uint8;
 typedef uint8 image[LENGTH_FEATURE0][LENGTH_FEATURE0];
 
-
 typedef struct LeNet5
 {
 	double weight0_1[INPUT][LAYER1][LENGTH_KERNEL0][LENGTH_KERNEL0];

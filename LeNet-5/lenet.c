@@ -190,31 +190,32 @@ static uint8 get_result(Feature *features, const char(*labels)[OUTPUT], uint8 co
 	return result;
 }
 
-
-void TrainBatch(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT], uint8 *labels, int batchSize)
-{
-	double buffer[GETCOUNT(LeNet5)] = { 0 };
-	int i = 0;
-#pragma omp parallel for
-	for (i = 0; i < batchSize; ++i)
-	{
-		Feature features = { 0 };
-		Feature errors = { 0 };
-		LeNet5	deltas = { 0 };
-		load_input(&features, inputs[i]);
-		forward(lenet, &features, tanh);
-		load_target(&features, &errors, resMat[labels[i]], tanhgrad);
-		backward(lenet, &deltas, &errors, &features, tanhgrad);
-		#pragma omp critical
-		{
-			FOREACH(j, GETCOUNT(LeNet5))
-				buffer[j] += ((double *)&deltas)[j];
-		}
-	}
-	double k = ALPHA / batchSize;
-	FOREACH(i, GETCOUNT(LeNet5))
-		((double *)lenet)[i] += k * buffer[i];
-}
+//
+//void TrainBatch(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT], uint8 *labels, int batchSize)
+//{
+//	double buffer[GETCOUNT(LeNet5)] = { 0 };
+//	int i = 0;
+//#pragma omp parallel for
+//	for (i = 0; i < batchSize; ++i)
+//	{
+//		Feature features = { 0 };
+//		Feature errors = { 0 };
+//		LeNet5	deltas = { 0 };
+//		load_input(&features, inputs[i]);
+//		forward(lenet, &features, tanh);
+//		load_target(&features, &errors, resMat[labels[i]], tanhgrad);
+//		backward(lenet, &deltas, &errors, &features, tanhgrad);
+//		#pragma omp critical
+//		{
+//			FOREACH(j, GETCOUNT(LeNet5))
+//				buffer[j] += ((double *)&deltas)[j];
+//		}
+//	}
+//	double k = ALPHA / batchSize;
+//	FOREACH(i, GETCOUNT(LeNet5))
+//		((double *)lenet)[i] += k * buffer[i];
+//}
+//
 
 void Train(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT], uint8 label)
 {
