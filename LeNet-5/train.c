@@ -15,8 +15,6 @@
 
 #define SZPACK (SZYMM / sizeof(double))
 
-#define MAXSZALIGN(type) (SZYMM - 1 + sizeof(type))
-
 
 typedef double pack[SZPACK];
 
@@ -159,6 +157,17 @@ static void matrix_x_vector(double *mat,pack *src,pack *des,long height,long wid
     }
 }
 
+static void vector_add_vector(pack *src,pack *des,long count)
+{
+    for(int x=0;x<count;++x)
+        asm("                           \
+            vmovapd (%0), %%ymm0;       \
+            vaddpd (%1), %%ymm0, %%ymm0;\
+            vmovapd %%ymm0, (%0);       \
+            "::"r"(des+x),"r"(src+x)
+            :"%ymm0","%ymm1");
+}
+
 
 
 
@@ -202,41 +211,39 @@ static void matrix_x_vector(double *mat,pack *src,pack *des,long height,long wid
 	for (int x = 0; x < GETLENGTH(weight); ++x)								\
 		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
 			CONVOLUTE_FULL(outerror[y], inerror[x], weight[x][y]);			\
-	FOREACH(x, GETCOUNT(inerror))											\
-        FOREACH(i,SZPACK)                                                   \
-		((pack *)inerror)[x][i] *= actiongrad(((pack *)input)[x][i]);		\
+	FOREACH(x, sizeof(inerror) / sizeof(double))							\
+		((double *)inerror)[x] *= actiongrad(((double *)input)[x]);         \
 	FOREACH(x, GETLENGTH(outerror))											\
-		FOREACH(y, GETCOUNT(outerror[y]))									\
-            FOREACH(i, SZPACK)                                              \
-                bd[x] += ((pack *)outerror[x])[y][i];						\
+		FOREACH(y, sizeof(outerror[x]) / sizeof(double))					\
+            bd[x] += ((double *)outerror[x])[y];                            \
 	for (int x = 0; x < GETLENGTH(weight); ++x)								\
 		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
 			CONVOLUTE_VALID2(input[x], wd[x][y], outerror[y]);				\
 }
 
-
-#define SUBSAMP_MAX_FORWARD(input,output)														\
-{																								\
-	const int len0 = GETLENGTH(*(input)) / GETLENGTH(*(output));								\
-	const int len1 = GETLENGTH(**(input)) / GETLENGTH(**(output));								\
-	FOREACH(j, GETLENGTH(output))																\
-	FOREACH(o0, GETLENGTH(*(output)))															\
-	FOREACH(o1, GETLENGTH(**(output)))															\
-	{																							\
-        FOREACH(i, SZPACK)                                                                      \
-        {                                                                                       \
-		int x0 = 0, x1 = 0, ismax;																\
-		FOREACH(l0, len0)																		\
-			FOREACH(l1, len1)																	\
-		{																						\
-			ismax = input[j][o0*len0 + l0][o1*len1 + l1][i] > input[j][o0*len0 + x0][o1*len1 + x1][i];\
-			x0 += ismax * (l0 - x0);															\
-			x1 += ismax * (l1 - x1);															\
-		}																						\
-		output[j][o0][o1][i] = input[j][o0*len0 + x0][o1*len1 + x1][i];								\
-        }                                                                                       \
-	}																							\
+static void subsamp_max_forward(pack *src,pack *des,
+                                const long sh,const long sw,
+                                const long dh,const long dw)
+{
+    const long lh = sh / dh,lw = sw / dw;
+    for(long d0 = 0;d0 < dh;++d0)
+        for(long d1 = 0;d1 < dw;++d1)
+        {
+            asm("vmovapd (%0), %%ymm0;"::"r"(src + d0 * lh * sw + d1 * lw):"%ymm0");
+            for(long l = 1;l < lh * lw;++l)
+                asm("vmaxpd (%0), %%ymm0, %%ymm0"::"r"(src + (d0 * lh + l / lw) * sw + d1 * lw + l % lw):"%ymm0");
+            asm("vmovapd %%ymm0, (%0);"::"r"(des + d0 * dw + d1):"%ymm0");
+        }
 }
+
+
+#define SUBSAMP_MAX_FORWARD(input,output)										\
+{																				\
+	FOREACH(j, GETLENGTH(output))												\
+    subsamp_max_forward((pack *)input[j],(pack *)output[j],GETLENGTH(*(input)), \
+        GETLENGTH(**(input)),GETLENGTH(*(output)),GETLENGTH(**(output)));       \
+}
+
 
 #define SUBSAMP_MAX_BACKWARD(input,inerror,outerror)											\
 {																								\
@@ -357,27 +364,26 @@ static char *align(char *p,const unsigned long align)
 
 void TrainBatch(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT], uint8 *labels, int batchSize)
 {
-    double buffer[sizeof(LeNet5)/sizeof(double)] = { 0 };
+    double dlenet[sizeof(LeNet5)/sizeof(double)] = { 0 };
     int i = 0;
 #pragma omp parallel for
     for (i = 0; i < batchSize / SZPACK; i++)
     {
-        char buffer1[MAXSZALIGN(FeaturePack)] = { 0 };
-        char buffer2[MAXSZALIGN(FeaturePack)] = { 0 };
-        FeaturePack *featurePack = (FeaturePack *)align(buffer1, sizeof(pack));
-        FeaturePack *errorPack = (FeaturePack *)align(buffer2, sizeof(pack));
-        LeNet5 delta = { 0 };
+        char buffer[sizeof(FeaturePack) * 2 + sizeof(LeNet5) + 2 * sizeof(pack) - 1] = { 0 };
+        FeaturePack *featurePack = (FeaturePack *)align(buffer, sizeof(pack));
+        FeaturePack *errorPack = featurePack + 1;
+        LeNet5 *delta = (LeNet5 *)(errorPack + 1);
         load_input(featurePack, inputs + i * SZPACK, SZPACK);
         forward(lenet, featurePack, tanh);
         load_target(featurePack, errorPack, labels + i * SZPACK, resMat, SZPACK, tanhgrad);
-        backward(lenet, &delta, errorPack, featurePack, tanhgrad);
+        backward(lenet, delta, errorPack, featurePack, tanhgrad);
         #pragma omp critical
         {
             FOREACH(j, sizeof(LeNet5)/sizeof(double))
-            buffer[j] += ((double *)&delta)[j];
+            dlenet[j] += ((double *)delta)[j];
         }
     }
-    double k = ALPHA / batchSize;
+    const double k = ALPHA / batchSize;
     FOREACH(i, sizeof(LeNet5)/sizeof(double))
-    ((double *)lenet)[i] += k * buffer[i];
+    ((double *)lenet)[i] += k * dlenet[i];
 }
