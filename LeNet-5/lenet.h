@@ -68,10 +68,8 @@ typedef struct Feature
 	double output[OUTPUT];
 }Feature;
 
-void TrainBatch(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT],uint8 *labels, int batchSize);
+void train(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT],uint8 *labels, int batchSize);
 
-void Train(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT],uint8 label);
+uint8 predict(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT], uint8 count);
 
-uint8 Predict(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT], uint8 count);
-
-void Initial(LeNet5 *lenet);
+void initial(LeNet5 *lenet);

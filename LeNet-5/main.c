@@ -44,7 +44,7 @@ void training(LeNet5 *lenet, image *train_data, uint8 *train_label, int batch_si
 {
 	for (int i = 0, percent = 0; i <= total_size - batch_size; i += batch_size)
 	{
-		TrainBatch(lenet, train_data + i, resMat, train_label + i, batch_size);
+		train(lenet, train_data + i, resMat, train_label + i, batch_size);
 		if (i * 100 / total_size > percent)
 			printf("batchsize:%d\ttrain:%2d%%\n", batch_size, percent = i * 100 / total_size);
 	}
@@ -56,7 +56,7 @@ int testing(LeNet5 *lenet, image *test_data, uint8 *test_label,int total_size)
 	for (int i = 0; i < total_size; ++i)
 	{
 		uint8 l = test_label[i];
-		int p = Predict(lenet, test_data[i], resMat, 10);
+		int p = predict(lenet, test_data[i], resMat, 10);
 		right += l == p;
 		if (i * 100 / total_size > percent)
 			printf("test:%2d%%\n", percent = i * 100 / total_size);
@@ -107,7 +107,7 @@ void foo()
 
 	LeNet5 *lenet = (LeNet5 *)malloc(sizeof(LeNet5));
 	if (load(lenet, LENET_FILE))
-		Initial(lenet);
+		initial(lenet);
 	clock_t start = time(0);
 	int batches[] = { 300 };
 	for (int i = 0; i < sizeof(batches) / sizeof(*batches);++i)

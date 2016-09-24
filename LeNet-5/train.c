@@ -15,10 +15,18 @@
 
 #define SZPACK (SZYMM / sizeof(double))
 
-#define ALIGN(size,align) (((align)-1+(size))/(align)*(align))
-
-
 typedef double pack[SZPACK];
+
+static void convolute_valid1(pack *src,double *conv,pack *des,const long dh,const long dw,const long ch,const long cw);
+static void convolute_valid2(pack *src,pack *conv,double *des,const long dh,const long dw,const long ch,const long cw);
+static void convolute_full(pack *src,double *conv,pack *des,long sh,long sw,long ch,long cw);
+static void vector_x_matrix(pack *src,double *mat,pack *des,long height,long width);
+static void matrix_x_vector(double *mat,pack *src,pack *des,long height,long width);
+static void subsamp_max_forward(pack *src,pack *des,const long sh,const long sw,const long dh,const long dw);
+
+
+
+#define ALIGN(size,align) (((align)-1+(size))/(align)*(align))
 
 typedef struct FeaturePack
 {
@@ -37,13 +45,217 @@ typedef struct FeaturePack
 
 #define FOREACH(i,count) for (int i = 0; i < count; ++i)
 
+#define CONVOLUTE_FULL(input,output,weight)                         \
+{                                                                   \
+    convolute_full((pack *)input,(double *)weight,(pack *)output,   \
+        GETLENGTH(input),GETLENGTH(*(input)),                       \
+        GETLENGTH(weight),GETLENGTH(*(weight)));                    \
+}
+
+#define CONVOLUTE_VALID1(input,output,weight)                       \
+{                                                                   \
+    convolute_valid1((pack *)input,(double *)weight,(pack *)output, \
+        GETLENGTH(output),GETLENGTH(*(output)),                     \
+        GETLENGTH(weight),GETLENGTH(*(weight)));                    \
+}
+
+
+#define CONVOLUTE_VALID2(input,output,weight)                       \
+{                                                                   \
+    convolute_valid2((pack *)input,(pack *)weight,(double *)output, \
+        GETLENGTH(output),GETLENGTH(*(output)),                     \
+        GETLENGTH(weight),GETLENGTH(*(weight)));                    \
+}
+
+
+
+#define CONVOLUTION_FORWARD(input,output,weight,bias,action)					\
+{																				\
+	for (int x = 0; x < GETLENGTH(weight); ++x)									\
+		for (int y = 0; y < GETLENGTH(*weight); ++y)							\
+			CONVOLUTE_VALID1(input[x], output[y], weight[x][y]);				\
+	FOREACH(x, GETLENGTH(output))												\
+		FOREACH(y, GETCOUNT(output[x]))											\
+        FOREACH(i, SZPACK)                                                      \
+		((pack *)output[x])[y][i] = action(((pack *)output[x])[y][i] + bias[x]);\
+}
+
+#define CONVOLUTION_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)\
+{																			\
+	for (int x = 0; x < GETLENGTH(weight); ++x)								\
+		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
+			CONVOLUTE_FULL(outerror[y], inerror[x], weight[x][y]);			\
+	FOREACH(x, sizeof(inerror) / sizeof(double))							\
+		((double *)inerror)[x] *= actiongrad(((double *)input)[x]);         \
+	FOREACH(x, GETLENGTH(outerror))											\
+		FOREACH(y, sizeof(outerror[x]) / sizeof(double))					\
+            bd[x] += ((double *)outerror[x])[y];                            \
+	for (int x = 0; x < GETLENGTH(weight); ++x)								\
+		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
+			CONVOLUTE_VALID2(input[x], wd[x][y], outerror[y]);				\
+}
+
+
+
+
+#define SUBSAMP_MAX_FORWARD(input,output)										\
+{																				\
+	FOREACH(j, GETLENGTH(output))												\
+    subsamp_max_forward((pack *)input[j],(pack *)output[j],GETLENGTH(*(input)), \
+        GETLENGTH(**(input)),GETLENGTH(*(output)),GETLENGTH(**(output)));       \
+}
+
+
+#define SUBSAMP_MAX_BACKWARD(input,inerror,outerror)							\
+{																				\
+	const int len0 = GETLENGTH(*(inerror)) / GETLENGTH(*(outerror));			\
+	const int len1 = GETLENGTH(**(inerror)) / GETLENGTH(**(outerror));			\
+	FOREACH(j, GETLENGTH(outerror))												\
+	FOREACH(o0, GETLENGTH(*(outerror)))											\
+	FOREACH(o1, GETLENGTH(**(outerror)))										\
+	{																			\
+        FOREACH(i, SZPACK)                                                      \
+        {                                                                       \
+		int x0 = 0, x1 = 0, ismax;												\
+		FOREACH(l0, len0)                                                       \
+			FOREACH(l1, len1)                                                   \
+            {                                                                   \
+                ismax = input[j][o0*len0 + l0][o1*len1 + l1][i] >               \
+                    input[j][o0*len0 + x0][o1*len1 + x1][i];                    \
+                x0 += ismax * (l0 - x0);                                        \
+                x1 += ismax * (l1 - x1);                                        \
+            }                                                                   \
+            inerror[j][o0*len0 + x0][o1*len1 + x1][i] = outerror[j][o0][o1][i]; \
+        }                                                                       \
+	}                                                                           \
+}
+
+
+#define DOT_PRODUCT_FORWARD(input,output,weight,bias,action)                  \
+{                                                                             \
+    vector_x_matrix((pack *)input,(double *)weight,(pack *)output,            \
+        GETLENGTH(weight),GETLENGTH(*(weight)));                              \
+	FOREACH(j, GETLENGTH(bias))                                               \
+        FOREACH(i, SZPACK)                                                    \
+            ((pack *)output)[j][i] = action(((pack *)output)[j][i] + bias[j]);\
+}
+
+#define DOT_PRODUCT_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)	\
+{																				\
+    matrix_x_vector((double *)weight,(pack *)outerror,(pack *)inerror,          \
+        GETLENGTH(weight),GETLENGTH(*(weight)));                                \
+	FOREACH(j, GETCOUNT(inerror))												\
+        FOREACH(i, SZPACK)                                                      \
+		((pack *)inerror)[j][i] *= actiongrad(((pack *)input)[j][i]);           \
+	FOREACH(j, GETLENGTH(outerror))												\
+        FOREACH(i, SZPACK)                                                      \
+		bd[j] += ((pack *)outerror)[j][i];                                      \
+	FOREACH(x, GETLENGTH(weight))                                               \
+        FOREACH(y, GETLENGTH(*weight))                                          \
+            FOREACH(i, SZPACK)                                                  \
+			wd[x][y] += ((pack *)input)[x][i] * ((pack *)outerror)[y][i];		\
+}
+
+static double tanhgrad(double y)
+{
+    return 1 - y*y;
+}
+
+static void forward(LeNet5 *lenet, FeaturePack *featurePack, double(*action)(double))
+{
+    CONVOLUTION_FORWARD(featurePack->layer0, featurePack->layer1, lenet->weight0_1, lenet->bias0_1, action);
+    SUBSAMP_MAX_FORWARD(featurePack->layer1, featurePack->layer2);
+    CONVOLUTION_FORWARD(featurePack->layer2, featurePack->layer3, lenet->weight2_3, lenet->bias2_3, action);
+    SUBSAMP_MAX_FORWARD(featurePack->layer3, featurePack->layer4);
+    CONVOLUTION_FORWARD(featurePack->layer4, featurePack->layer5, lenet->weight4_5, lenet->bias4_5, action);
+    DOT_PRODUCT_FORWARD(featurePack->layer5, featurePack->output, lenet->weight5_6, lenet->bias5_6, action);
+}
+
+static void backward(LeNet5 *lenet, LeNet5 *delta, FeaturePack *errorPack, FeaturePack *featurePack, double(*actiongrad)(double))
+{
+    DOT_PRODUCT_BACKWARD(featurePack->layer5, errorPack->layer5, errorPack->output, lenet->weight5_6, delta->weight5_6, delta->bias5_6, actiongrad);
+    CONVOLUTION_BACKWARD(featurePack->layer4, errorPack->layer4, errorPack->layer5, lenet->weight4_5, delta->weight4_5, delta->bias4_5, actiongrad);
+    SUBSAMP_MAX_BACKWARD(featurePack->layer3, errorPack->layer3, errorPack->layer4);
+    CONVOLUTION_BACKWARD(featurePack->layer2, errorPack->layer2, errorPack->layer3, lenet->weight2_3, delta->weight2_3, delta->bias2_3, actiongrad);
+    SUBSAMP_MAX_BACKWARD(featurePack->layer1, errorPack->layer1, errorPack->layer2);
+    CONVOLUTION_BACKWARD(featurePack->layer0, errorPack->layer0, errorPack->layer1, lenet->weight0_1, delta->weight0_1, delta->bias0_1, actiongrad);
+}
+
+static void load_input(FeaturePack *featurePack, image input[],uint8 count)
+{
+    count = count % 5;
+    const long sz = sizeof(*input) / sizeof(***input);
+    FOREACH(i, count)
+    {
+        double mean = 0,std = 0;
+        FOREACH(j, GETLENGTH(*input))
+        FOREACH(k, GETLENGTH(**input))
+        {
+            mean += input[i][j][k];
+            std += input[i][j][k] * input[i][j][k];
+        }
+        mean /= sz;
+        std = sqrt(std / sz - mean*mean);
+        FOREACH(j, GETLENGTH(*input))
+        FOREACH(k, GETLENGTH(**input))
+        {
+            featurePack->layer0[0][j][k][i] = (input[i][j][k] - mean) / std;
+        }
+    }
+}
+
+static void load_target(FeaturePack *featurePack, FeaturePack *errorPack, uint8 *label,const char(*resMat)[OUTPUT],uint8 count, double(*actiongrad)(double))
+{
+    count = count % 5;
+    pack *output = (pack *)featurePack->output;
+    pack *error = (pack *)errorPack->output;
+    FOREACH(i, GETCOUNT(featurePack->output))
+    {
+        FOREACH(j, count)
+        {
+            error[i][j] = (resMat[label[j]][i] - output[i][j])*actiongrad(output[i][j]);
+        }
+    }
+}
+
+
+
+void train(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT], uint8 *labels, int batchSize)
+{
+    double dlenet[ALIGN(sizeof(LeNet5),sizeof(pack))] = { 0 };
+    int i = 0;
+    uint8 szload = SZPACK;
+#pragma omp parallel for
+    for (i = 0; i < (batchSize + SZPACK - 1) / SZPACK; i++)
+    {
+        if(szload > batchSize - i * SZPACK)
+            szload = batchSize - i * SZPACK;
+        char buffer[sizeof(FeaturePack) * 2 + ALIGN(sizeof(LeNet5), sizeof(pack)) + sizeof(pack) - 1] = { 0 };
+        FeaturePack *featurePack = (FeaturePack *)ALIGN((unsigned long)buffer, sizeof(pack));
+        FeaturePack *errorPack = featurePack + 1;
+        LeNet5 *delta = (LeNet5 *)(errorPack + 1);
+        load_input(featurePack, inputs + i * SZPACK, szload);
+        forward(lenet, featurePack, tanh);
+        load_target(featurePack, errorPack, labels + i * SZPACK, resMat, szload, tanhgrad);
+        backward(lenet, delta, errorPack, featurePack, tanhgrad);
+        #pragma omp critical
+        {
+            FOREACH(j, sizeof(LeNet5)/sizeof(double))
+                dlenet[j] += ((double *)delta)[j];
+        }
+    }
+    const double k = ALPHA / batchSize;
+    FOREACH(i, sizeof(LeNet5)/sizeof(double))
+    ((double *)lenet)[i] += k * dlenet[i];
+}
+
 static void convolute_valid1(pack *src,
-                            double *conv,
-                            pack *des,
-                            const long dh,
-                            const long dw,
-                            const long ch,
-                            const long cw)
+                             double *conv,
+                             pack *des,
+                             const long dh,
+                             const long dw,
+                             const long ch,
+                             const long cw)
 {
     const long sw = dw + cw - 1;
     for(int d0=0;d0<dh;++d0)
@@ -159,70 +371,6 @@ static void matrix_x_vector(double *mat,pack *src,pack *des,long height,long wid
     }
 }
 
-static void vector_add_vector(pack *src,pack *des,long count)
-{
-    for(int x=0;x<count;++x)
-        asm("                           \
-            vmovapd (%0), %%ymm0;       \
-            vaddpd (%1), %%ymm0, %%ymm0;\
-            vmovapd %%ymm0, (%0);       \
-            "::"r"(des+x),"r"(src+x)
-            :"%ymm0","%ymm1");
-}
-
-
-
-
-#define CONVOLUTE_FULL(input,output,weight)                         \
-{                                                                   \
-    convolute_full((pack *)input,(double *)weight,(pack *)output,   \
-        GETLENGTH(input),GETLENGTH(*(input)),                       \
-        GETLENGTH(weight),GETLENGTH(*(weight)));                    \
-}
-
-#define CONVOLUTE_VALID1(input,output,weight)                       \
-{                                                                   \
-    convolute_valid1((pack *)input,(double *)weight,(pack *)output, \
-        GETLENGTH(output),GETLENGTH(*(output)),                     \
-        GETLENGTH(weight),GETLENGTH(*(weight)));                    \
-}
-
-
-#define CONVOLUTE_VALID2(input,output,weight)                       \
-{                                                                   \
-    convolute_valid2((pack *)input,(pack *)weight,(double *)output, \
-        GETLENGTH(output),GETLENGTH(*(output)),                     \
-        GETLENGTH(weight),GETLENGTH(*(weight)));                    \
-}
-
-
-
-#define CONVOLUTION_FORWARD(input,output,weight,bias,action)					\
-{																				\
-	for (int x = 0; x < GETLENGTH(weight); ++x)									\
-		for (int y = 0; y < GETLENGTH(*weight); ++y)							\
-			CONVOLUTE_VALID1(input[x], output[y], weight[x][y]);				\
-	FOREACH(x, GETLENGTH(output))												\
-		FOREACH(y, GETCOUNT(output[x]))											\
-        FOREACH(i, SZPACK)                                                      \
-		((pack *)output[x])[y][i] = action(((pack *)output[x])[y][i] + bias[x]);\
-}
-
-#define CONVOLUTION_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)\
-{																			\
-	for (int x = 0; x < GETLENGTH(weight); ++x)								\
-		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
-			CONVOLUTE_FULL(outerror[y], inerror[x], weight[x][y]);			\
-	FOREACH(x, sizeof(inerror) / sizeof(double))							\
-		((double *)inerror)[x] *= actiongrad(((double *)input)[x]);         \
-	FOREACH(x, GETLENGTH(outerror))											\
-		FOREACH(y, sizeof(outerror[x]) / sizeof(double))					\
-            bd[x] += ((double *)outerror[x])[y];                            \
-	for (int x = 0; x < GETLENGTH(weight); ++x)								\
-		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
-			CONVOLUTE_VALID2(input[x], wd[x][y], outerror[y]);				\
-}
-
 static void subsamp_max_forward(pack *src,pack *des,
                                 const long sh,const long sw,
                                 const long dh,const long dw)
@@ -236,155 +384,4 @@ static void subsamp_max_forward(pack *src,pack *des,
                 asm("vmaxpd (%0), %%ymm0, %%ymm0"::"r"(src + (d0 * lh + l / lw) * sw + d1 * lw + l % lw):"%ymm0");
             asm("vmovapd %%ymm0, (%0);"::"r"(des + d0 * dw + d1):"%ymm0");
         }
-}
-
-
-#define SUBSAMP_MAX_FORWARD(input,output)										\
-{																				\
-	FOREACH(j, GETLENGTH(output))												\
-    subsamp_max_forward((pack *)input[j],(pack *)output[j],GETLENGTH(*(input)), \
-        GETLENGTH(**(input)),GETLENGTH(*(output)),GETLENGTH(**(output)));       \
-}
-
-
-#define SUBSAMP_MAX_BACKWARD(input,inerror,outerror)											\
-{																								\
-	const int len0 = GETLENGTH(*(inerror)) / GETLENGTH(*(outerror));							\
-	const int len1 = GETLENGTH(**(inerror)) / GETLENGTH(**(outerror));							\
-	FOREACH(j, GETLENGTH(outerror))																\
-	FOREACH(o0, GETLENGTH(*(outerror)))															\
-	FOREACH(o1, GETLENGTH(**(outerror)))														\
-	{																							\
-        FOREACH(i, SZPACK)                                                                      \
-        {                                                                                       \
-		int x0 = 0, x1 = 0, ismax;																\
-		FOREACH(l0, len0)																		\
-			FOREACH(l1, len1)																	\
-		{																						\
-			ismax = input[j][o0*len0 + l0][o1*len1 + l1][i] > input[j][o0*len0 + x0][o1*len1 + x1][i];\
-			x0 += ismax * (l0 - x0);															\
-			x1 += ismax * (l1 - x1);															\
-		}                                                                                       \
-        inerror[j][o0*len0 + x0][o1*len1 + x1][i] = outerror[j][o0][o1][i];						\
-        }                                                                                       \
-	}																							\
-}
-
-
-#define DOT_PRODUCT_FORWARD(input,output,weight,bias,action)                  \
-{                                                                             \
-    vector_x_matrix((pack *)input,(double *)weight,(pack *)output,            \
-        GETLENGTH(weight),GETLENGTH(*(weight)));                              \
-	FOREACH(j, GETLENGTH(bias))                                               \
-        FOREACH(i, SZPACK)                                                    \
-            ((pack *)output)[j][i] = action(((pack *)output)[j][i] + bias[j]);\
-}
-
-#define DOT_PRODUCT_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)	\
-{																				\
-    matrix_x_vector((double *)weight,(pack *)outerror,(pack *)inerror,          \
-        GETLENGTH(weight),GETLENGTH(*(weight)));                                \
-	FOREACH(j, GETCOUNT(inerror))												\
-        FOREACH(i, SZPACK)                                                      \
-		((pack *)inerror)[j][i] *= actiongrad(((pack *)input)[j][i]);           \
-	FOREACH(j, GETLENGTH(outerror))												\
-        FOREACH(i, SZPACK)                                                      \
-		bd[j] += ((pack *)outerror)[j][i];                                      \
-	FOREACH(x, GETLENGTH(weight))                                               \
-        FOREACH(y, GETLENGTH(*weight))                                          \
-            FOREACH(i, SZPACK)                                                  \
-			wd[x][y] += ((pack *)input)[x][i] * ((pack *)outerror)[y][i];		\
-}
-
-static double tanhgrad(double y)
-{
-    return 1 - y*y;
-}
-
-static void forward(LeNet5 *lenet, FeaturePack *featurePack, double(*action)(double))
-{
-    CONVOLUTION_FORWARD(featurePack->layer0, featurePack->layer1, lenet->weight0_1, lenet->bias0_1, action);
-    SUBSAMP_MAX_FORWARD(featurePack->layer1, featurePack->layer2);
-    CONVOLUTION_FORWARD(featurePack->layer2, featurePack->layer3, lenet->weight2_3, lenet->bias2_3, action);
-    SUBSAMP_MAX_FORWARD(featurePack->layer3, featurePack->layer4);
-    CONVOLUTION_FORWARD(featurePack->layer4, featurePack->layer5, lenet->weight4_5, lenet->bias4_5, action);
-    DOT_PRODUCT_FORWARD(featurePack->layer5, featurePack->output, lenet->weight5_6, lenet->bias5_6, action);
-}
-
-static void backward(LeNet5 *lenet, LeNet5 *delta, FeaturePack *errorPack, FeaturePack *featurePack, double(*actiongrad)(double))
-{
-    DOT_PRODUCT_BACKWARD(featurePack->layer5, errorPack->layer5, errorPack->output, lenet->weight5_6, delta->weight5_6, delta->bias5_6, actiongrad);
-    CONVOLUTION_BACKWARD(featurePack->layer4, errorPack->layer4, errorPack->layer5, lenet->weight4_5, delta->weight4_5, delta->bias4_5, actiongrad);
-    SUBSAMP_MAX_BACKWARD(featurePack->layer3, errorPack->layer3, errorPack->layer4);
-    CONVOLUTION_BACKWARD(featurePack->layer2, errorPack->layer2, errorPack->layer3, lenet->weight2_3, delta->weight2_3, delta->bias2_3, actiongrad);
-    SUBSAMP_MAX_BACKWARD(featurePack->layer1, errorPack->layer1, errorPack->layer2);
-    CONVOLUTION_BACKWARD(featurePack->layer0, errorPack->layer0, errorPack->layer1, lenet->weight0_1, delta->weight0_1, delta->bias0_1, actiongrad);
-}
-
-static void load_input(FeaturePack *featurePack, image input[],uint8 count)
-{
-    count = count % 5;
-    const long sz = sizeof(*input) / sizeof(***input);
-    FOREACH(i, count)
-    {
-        double mean = 0,std = 0;
-        FOREACH(j, GETLENGTH(*input))
-        FOREACH(k, GETLENGTH(**input))
-        {
-            mean += input[i][j][k];
-            std += input[i][j][k] * input[i][j][k];
-        }
-        mean /= sz;
-        std = sqrt(std / sz - mean*mean);
-        FOREACH(j, GETLENGTH(*input))
-        FOREACH(k, GETLENGTH(**input))
-        {
-            featurePack->layer0[0][j][k][i] = (input[i][j][k] - mean) / std;
-        }
-    }
-}
-
-static void load_target(FeaturePack *featurePack, FeaturePack *errorPack, uint8 *label,const char(*resMat)[OUTPUT],uint8 count, double(*actiongrad)(double))
-{
-    count = count % 5;
-    pack *output = (pack *)featurePack->output;
-    pack *error = (pack *)errorPack->output;
-    FOREACH(i, GETCOUNT(featurePack->output))
-    {
-        FOREACH(j, count)
-        {
-            error[i][j] = (resMat[label[j]][i] - output[i][j])*actiongrad(output[i][j]);
-        }
-    }
-}
-
-
-
-void TrainBatch(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT], uint8 *labels, int batchSize)
-{
-    double dlenet[sizeof(LeNet5)/sizeof(double)] = { 0 };
-    int i = 0;
-    uint8 szload = SZPACK;
-#pragma omp parallel for
-    for (i = 0; i < batchSize / SZPACK; i++)
-    {
-        if(szload > batchSize - i * SZPACK)
-            szload = batchSize - i * SZPACK;
-        char buffer[sizeof(FeaturePack) * 2 + ALIGN(sizeof(LeNet5), sizeof(pack)) + sizeof(pack) - 1] = { 0 };
-        FeaturePack *featurePack = (FeaturePack *)ALIGN((unsigned long)buffer, sizeof(pack));
-        FeaturePack *errorPack = featurePack + 1;
-        LeNet5 *delta = (LeNet5 *)(errorPack + 1);
-        load_input(featurePack, inputs + i * SZPACK, szload);
-        forward(lenet, featurePack, tanh);
-        load_target(featurePack, errorPack, labels + i * SZPACK, resMat, szload, tanhgrad);
-        backward(lenet, delta, errorPack, featurePack, tanhgrad);
-        #pragma omp critical
-        {
-            FOREACH(j, sizeof(LeNet5)/sizeof(double))
-            dlenet[j] += ((double *)delta)[j];
-        }
-    }
-    const double k = ALPHA / batchSize;
-    FOREACH(i, sizeof(LeNet5)/sizeof(double))
-    ((double *)lenet)[i] += k * dlenet[i];
 }
