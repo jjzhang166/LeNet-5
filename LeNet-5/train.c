@@ -15,6 +15,8 @@
 
 #define SZPACK (SZYMM / sizeof(double))
 
+#define ALIGN(size,align) (((align)-1+(size))/(align)*(align))
+
 
 typedef double pack[SZPACK];
 
@@ -356,11 +358,7 @@ static void load_target(FeaturePack *featurePack, FeaturePack *errorPack, uint8 
     }
 }
 
-static char *align(char *p,const unsigned long align)
-{
-    const unsigned long mod = (unsigned long)p % align;
-    return p + (mod > 0) * (align - mod);
-}
+
 
 void TrainBatch(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT], uint8 *labels, int batchSize)
 {
@@ -369,8 +367,8 @@ void TrainBatch(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT], uint8
 #pragma omp parallel for
     for (i = 0; i < batchSize / SZPACK; i++)
     {
-        char buffer[sizeof(FeaturePack) * 2 + sizeof(LeNet5) + 2 * sizeof(pack) - 1] = { 0 };
-        FeaturePack *featurePack = (FeaturePack *)align(buffer, sizeof(pack));
+        char buffer[sizeof(FeaturePack) * 2 + ALIGN(sizeof(LeNet5), sizeof(pack)) + sizeof(pack) - 1] = { 0 };
+        FeaturePack *featurePack = (FeaturePack *)ALIGN((unsigned long)buffer, sizeof(pack));
         FeaturePack *errorPack = featurePack + 1;
         LeNet5 *delta = (LeNet5 *)(errorPack + 1);
         load_input(featurePack, inputs + i * SZPACK, SZPACK);
