@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		6612B75D1D929FCF00B600A4 /* train.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6612B75C1D929FCF00B600A4 /* train.cpp */; };
-		66F60A011CE4A14700DF26D2 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 66F60A001CE4A14700DF26D2 /* main.cpp */; };
-		66F60A091CE4A37F00DF26D2 /* lenet.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 66F60A071CE4A37F00DF26D2 /* lenet.cpp */; };
+		6612B75D1D929FCF00B600A4 /* train.c in Sources */ = {isa = PBXBuildFile; fileRef = 6612B75C1D929FCF00B600A4 /* train.c */; };
+		66F60A011CE4A14700DF26D2 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 66F60A001CE4A14700DF26D2 /* main.c */; };
+		66F60A091CE4A37F00DF26D2 /* lenet.c in Sources */ = {isa = PBXBuildFile; fileRef = 66F60A071CE4A37F00DF26D2 /* lenet.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -25,10 +25,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		6612B75C1D929FCF00B600A4 /* train.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = train.cpp; sourceTree = "<group>"; };
+		6612B75C1D929FCF00B600A4 /* train.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = train.c; sourceTree = "<group>"; };
 		66F609FD1CE4A14700DF26D2 /* LeNet-5 */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "LeNet-5"; sourceTree = BUILT_PRODUCTS_DIR; };
-		66F60A001CE4A14700DF26D2 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
-		66F60A071CE4A37F00DF26D2 /* lenet.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = lenet.cpp; sourceTree = "<group>"; };
+		66F60A001CE4A14700DF26D2 /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
+		66F60A071CE4A37F00DF26D2 /* lenet.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = lenet.c; sourceTree = "<group>"; };
 		66F60A081CE4A37F00DF26D2 /* lenet.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = lenet.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -62,10 +62,10 @@
 		66F609FF1CE4A14700DF26D2 /* LeNet-5 */ = {
 			isa = PBXGroup;
 			children = (
-				66F60A071CE4A37F00DF26D2 /* lenet.cpp */,
+				66F60A071CE4A37F00DF26D2 /* lenet.c */,
 				66F60A081CE4A37F00DF26D2 /* lenet.h */,
-				66F60A001CE4A14700DF26D2 /* main.cpp */,
-				6612B75C1D929FCF00B600A4 /* train.cpp */,
+				66F60A001CE4A14700DF26D2 /* main.c */,
+				6612B75C1D929FCF00B600A4 /* train.c */,
 			);
 			path = "LeNet-5";
 			sourceTree = "<group>";
@@ -126,9 +126,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				6612B75D1D929FCF00B600A4 /* train.cpp in Sources */,
-				66F60A091CE4A37F00DF26D2 /* lenet.cpp in Sources */,
-				66F60A011CE4A14700DF26D2 /* main.cpp in Sources */,
+				6612B75D1D929FCF00B600A4 /* train.c in Sources */,
+				66F60A091CE4A37F00DF26D2 /* lenet.c in Sources */,
+				66F60A011CE4A14700DF26D2 /* main.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
