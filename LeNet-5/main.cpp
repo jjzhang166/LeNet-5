@@ -73,7 +73,7 @@ int save(LeNet5 *lenet, char filename[])
 	return 0;
 }
 
-int load(LeNet5 *lenet, char filename[])
+int load(LeNet5 *lenet, const char filename[])
 {
 	FILE *fp = fopen(filename, "rb");
 	if (!fp) return 1;

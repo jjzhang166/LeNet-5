@@ -364,16 +364,19 @@ void TrainBatch(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT], uint8
 {
     double dlenet[sizeof(LeNet5)/sizeof(double)] = { 0 };
     int i = 0;
+    uint8 szload = SZPACK;
 #pragma omp parallel for
     for (i = 0; i < batchSize / SZPACK; i++)
     {
+        if(szload > batchSize - i * SZPACK)
+            szload = batchSize - i * SZPACK;
         char buffer[sizeof(FeaturePack) * 2 + ALIGN(sizeof(LeNet5), sizeof(pack)) + sizeof(pack) - 1] = { 0 };
         FeaturePack *featurePack = (FeaturePack *)ALIGN((unsigned long)buffer, sizeof(pack));
         FeaturePack *errorPack = featurePack + 1;
         LeNet5 *delta = (LeNet5 *)(errorPack + 1);
-        load_input(featurePack, inputs + i * SZPACK, SZPACK);
+        load_input(featurePack, inputs + i * SZPACK, szload);
         forward(lenet, featurePack, tanh);
-        load_target(featurePack, errorPack, labels + i * SZPACK, resMat, SZPACK, tanhgrad);
+        load_target(featurePack, errorPack, labels + i * SZPACK, resMat, szload, tanhgrad);
         backward(lenet, delta, errorPack, featurePack, tanhgrad);
         #pragma omp critical
         {
