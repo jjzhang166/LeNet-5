@@ -1,20 +1,17 @@
 ﻿/*
 @author : 范文捷
-@data    : 2016-04-20
+@data    : 2016-09-20
 @note	: 根据Yann Lecun的论文《Gradient-based Learning Applied To Document Recognition》编写
 @api	:
 
 批量训练
-void TrainBatch(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT],uint8 *labels, int batchSize);
-
-训练
-void Train(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT],uint8 label);
+void train(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT],uint8 *labels, int batchSize);
 
 预测
-uint8 Predict(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT], uint8 count);
+uint8 predict(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT], uint8 count);
 
 初始化
-void Initial(LeNet5 *lenet);
+void initial(LeNet5 *lenet);
 */
 
 #pragma once
