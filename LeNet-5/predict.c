@@ -126,9 +126,6 @@ void initial(LeNet5 *lenet)
 	for (int *pos = (int *)lenet->bias0_1; pos < (int *)(lenet + 1); *pos++ = 0);
 }
 
-
-#if (__GNUC__ && (__i386__ || __x86_64__))
-
 const static unsigned long long mask[] ={0x8000000000000000L,0x8000000000000000L,0x8000000000000000L,0x8000000000000000L,0,0,0,0};
 
 
@@ -179,23 +176,3 @@ static void convolute_valid(double *src,double *conv,double *des,const long dh,c
         }
     }
 }
-
-#else
-
-static void vector_x_matrix(double *src,double *mat,double *des,long height,long width)
-{
-    for (int x = 0; x < height; ++x)
-        for (int y = 0; y < width; ++y)
-            des[y] += src[x] * mat[x * width + y];
-}
-
-static void convolute_valid(double *src,double *conv,double *des,long dh,long dw,long ch,long cw)
-{
-    const long sw = dw + cw - 1;
-    for(int d0=0;d0<dh;++d0)
-        for(int d1=0;d1<dw;++d1)
-            for(int c0=0;c0<ch;++c0)
-                for(int c1=0;c1<cw;++c1)
-                    des[d0*dw+d1]+=src[(d0+c0)*sw+d1+c1]*conv[c0*cw+c1];
-}
-#endif

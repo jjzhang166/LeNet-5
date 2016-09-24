@@ -16,6 +16,10 @@ void initial(LeNet5 *lenet);
 
 #pragma once
 
+#if (!(__GNUC__ && (__i386__ || __x86_64__)))
+#error AVX OR GNUC Not Support
+#endif
+
 #define LENGTH_KERNEL0	5
 #define LENGTH_KERNEL1	4
 
