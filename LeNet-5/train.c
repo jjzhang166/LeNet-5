@@ -11,8 +11,9 @@
 #include <stdlib.h>
 #include <math.h>
 
+//AVX指令集用到的YMM寄存器存储空间大小
 #define SZYMM   32
-
+//YMM寄存器可存储双精度浮点数个数
 #define SZPACK (SZYMM / sizeof(double))
 
 typedef double pack[SZPACK];
@@ -23,10 +24,11 @@ static void convolute_full(pack *src,double *conv,pack *des,long sh,long sw,long
 static void vector_x_matrix(pack *src,double *mat,pack *des,long height,long width);
 static void matrix_x_vector(double *mat,pack *src,pack *des,long height,long width);
 static void subsamp_max_forward(pack *src,pack *des,const long sh,const long sw,const long dh,const long dw);
+static void subsamp_max_backward(pack *srcl,pack *desl,pack *src,pack *des,const long sh,const long sw,const long dh,const long dw);
 
 
-
-#define ALIGN(size,align) (((align)-1+(size))/(align)*(align))
+//f(n,align) = min{x|x >= n && x % align==0}
+#define ALIGN(n,align) (((align)-1+(n))/(align)*(align))
 
 typedef struct FeaturePack
 {
@@ -43,7 +45,7 @@ typedef struct FeaturePack
 
 #define GETCOUNT(array)  (sizeof(array)/sizeof(pack))
 
-#define FOREACH(i,count) for (int i = 0; i < count; ++i)
+#define FOREACH(i,count) for (long i = 0; i < count; ++i)
 
 #define CONVOLUTE_FULL(input,output,weight)                         \
 {                                                                   \
@@ -105,31 +107,13 @@ typedef struct FeaturePack
         GETLENGTH(**(input)),GETLENGTH(*(output)),GETLENGTH(**(output)));       \
 }
 
-
-#define SUBSAMP_MAX_BACKWARD(input,inerror,outerror)							\
-{																				\
-	const int len0 = GETLENGTH(*(inerror)) / GETLENGTH(*(outerror));			\
-	const int len1 = GETLENGTH(**(inerror)) / GETLENGTH(**(outerror));			\
-	FOREACH(j, GETLENGTH(outerror))												\
-	FOREACH(o0, GETLENGTH(*(outerror)))											\
-	FOREACH(o1, GETLENGTH(**(outerror)))										\
-	{																			\
-        FOREACH(i, SZPACK)                                                      \
-        {                                                                       \
-		int x0 = 0, x1 = 0, ismax;												\
-		FOREACH(l0, len0)                                                       \
-			FOREACH(l1, len1)                                                   \
-            {                                                                   \
-                ismax = input[j][o0*len0 + l0][o1*len1 + l1][i] >               \
-                    input[j][o0*len0 + x0][o1*len1 + x1][i];                    \
-                x0 += ismax * (l0 - x0);                                        \
-                x1 += ismax * (l1 - x1);                                        \
-            }                                                                   \
-            inerror[j][o0*len0 + x0][o1*len1 + x1][i] = outerror[j][o0][o1][i]; \
-        }                                                                       \
-	}                                                                           \
+#define SUBSAMP_MAX_BACKWARD(input,inerror,outerror,output)                     \
+{                                                                               \
+	FOREACH(j, GETLENGTH(output))												\
+    subsamp_max_backward((pack *)output[j],(pack *)input[j],                    \
+        (pack *)outerror[j],(pack *)inerror[j],GETLENGTH(*(output)),            \
+        GETLENGTH(**(output)),GETLENGTH(*(input)),GETLENGTH(**(input)));        \
 }
-
 
 #define DOT_PRODUCT_FORWARD(input,output,weight,bias,action)                  \
 {                                                                             \
@@ -175,9 +159,9 @@ static void backward(LeNet5 *lenet, LeNet5 *delta, FeaturePack *errorPack, Featu
 {
     DOT_PRODUCT_BACKWARD(featurePack->layer5, errorPack->layer5, errorPack->output, lenet->weight5_6, delta->weight5_6, delta->bias5_6, actiongrad);
     CONVOLUTION_BACKWARD(featurePack->layer4, errorPack->layer4, errorPack->layer5, lenet->weight4_5, delta->weight4_5, delta->bias4_5, actiongrad);
-    SUBSAMP_MAX_BACKWARD(featurePack->layer3, errorPack->layer3, errorPack->layer4);
+    SUBSAMP_MAX_BACKWARD(featurePack->layer3, errorPack->layer3, errorPack->layer4,featurePack->layer4);
     CONVOLUTION_BACKWARD(featurePack->layer2, errorPack->layer2, errorPack->layer3, lenet->weight2_3, delta->weight2_3, delta->bias2_3, actiongrad);
-    SUBSAMP_MAX_BACKWARD(featurePack->layer1, errorPack->layer1, errorPack->layer2);
+    SUBSAMP_MAX_BACKWARD(featurePack->layer1, errorPack->layer1, errorPack->layer2,featurePack->layer2);
     CONVOLUTION_BACKWARD(featurePack->layer0, errorPack->layer0, errorPack->layer1, lenet->weight0_1, delta->weight0_1, delta->bias0_1, actiongrad);
 }
 
@@ -258,13 +242,13 @@ static void convolute_valid1(pack *src,
                              const long cw)
 {
     const long sw = dw + cw - 1;
-    for(int d0=0;d0<dh;++d0)
-        for(int d1=0;d1<dw;++d1)
+    for(long d0=0;d0<dh;++d0)
+        for(long d1=0;d1<dw;++d1)
         {
             pack *d = des + d0 * dw + d1;
             asm("vmovapd (%0), %%ymm0;"::"r"(d):"%ymm0");
-            for(int c0=0;c0<ch;++c0)
-                for(int c1=0;c1<cw;++c1)
+            for(long c0=0;c0<ch;++c0)
+                for(long c1=0;c1<cw;++c1)
                 {
                     asm("                                   \
                         vmovapd (%0), %%ymm1;               \
@@ -286,12 +270,12 @@ static void convolute_valid2(pack *src,
                              const long cw)
 {
     const long sw = dw + cw - 1;
-    for(int d0 = 0;d0 < dh;++d0)
-        for(int d1 = 0;d1 < dw;++d1)
+    for(long d0 = 0;d0 < dh;++d0)
+        for(long d1 = 0;d1 < dw;++d1)
         {
             asm("vxorpd %ymm0, %ymm0, %ymm0;");
-            for(int c0=0;c0<ch;++c0)
-                for(int c1=0;c1<cw;++c1)
+            for(long c0=0;c0<ch;++c0)
+                for(long c1=0;c1<cw;++c1)
                 {
                     asm("                                   \
                         vmovapd (%0), %%ymm1;               \
@@ -319,12 +303,12 @@ static void convolute_full(pack *src,
                            long cw)
 {
     const long dw = sw + cw - 1;
-    for(int s0 = 0;s0 < sh;++s0)
-        for(int s1 = 0;s1 < sw;++s1)
+    for(long s0 = 0;s0 < sh;++s0)
+        for(long s1 = 0;s1 < sw;++s1)
         {
             asm("vmovapd (%0), %%ymm1;"::"r"(src + s0 * sw + s1):"%ymm1");
-            for(int c0=0;c0<ch;++c0)
-                for(int c1=0;c1<cw;++c1)
+            for(long c0=0;c0<ch;++c0)
+                for(long c1=0;c1<cw;++c1)
                 {
                     asm("                                   \
                         vbroadcastsd %0, %%ymm2;            \
@@ -339,10 +323,10 @@ static void convolute_full(pack *src,
 
 static void vector_x_matrix(pack *src,double *mat,pack *des,long height,long width)
 {
-    for (int y = 0; y < width; ++y)
+    for (long y = 0; y < width; ++y)
     {
         asm("vmovapd (%0), %%ymm0;"::"r"(des + y):"%ymm0");
-        for (int x = 0; x < height; ++x)
+        for (long x = 0; x < height; ++x)
         {
             asm("                                   \
                 vbroadcastsd %1, %%ymm1;            \
@@ -356,10 +340,10 @@ static void vector_x_matrix(pack *src,double *mat,pack *des,long height,long wid
 
 static void matrix_x_vector(double *mat,pack *src,pack *des,long height,long width)
 {
-    for (int x = 0; x < height; ++x)
+    for (long x = 0; x < height; ++x)
     {
         asm("vmovapd (%0), %%ymm0;"::"r"(des + x):"%ymm0");
-        for (int y = 0; y < width; ++y)
+        for (long y = 0; y < width; ++y)
         {
             asm("                                   \
                 vbroadcastsd %1, %%ymm1;            \
@@ -383,5 +367,34 @@ static void subsamp_max_forward(pack *src,pack *des,
             for(long l = 1;l < lh * lw;++l)
                 asm("vmaxpd (%0), %%ymm0, %%ymm0"::"r"(src + (d0 * lh + l / lw) * sw + d1 * lw + l % lw):"%ymm0");
             asm("vmovapd %%ymm0, (%0);"::"r"(des + d0 * dw + d1):"%ymm0");
+        }
+}
+
+static void subsamp_max_backward(pack *srcl,pack *desl,
+                                 pack *src,pack *des,
+                                 const long sh,const long sw,
+                                 const long dh,const long dw)
+{
+    const long lh = dh / sh,lw = dw / sw;
+    for(long s0 = 0;s0 < sh;++s0)
+        for(long s1 = 0;s1 < sw;++s1)
+        {
+            long index = s0 * sw + s1;
+            asm("                       \
+                vmovapd (%0), %%ymm0;   \
+                vmovapd (%1), %%ymm1;   \
+                "::"r"(src + index),"r"(srcl + index)
+                :"%ymm0","%ymm1");
+            for(long l = 0;l < lh * lw;++l)
+            {
+                index = (s0 * lh + l / lw) * dw + s1 * lw + l % lw;
+                asm("                               \
+                    vmovapd (%1), %%ymm2;           \
+                    vcmpeqpd %%ymm2, %%ymm1, %%ymm2;\
+                    vmaskmovpd %%ymm0, %%ymm2, (%0);\
+                    vorpd %%ymm2, %%ymm1, %%ymm1;   \
+                    "::"r"(des + index),"r"(desl + index)
+                    :"%ymm0","%ymm1","%ymm2");
+            }
         }
 }

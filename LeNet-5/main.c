@@ -58,8 +58,8 @@ int testing(LeNet5 *lenet, image *test_data, uint8 *test_label,int total_size)
 		uint8 l = test_label[i];
 		int p = predict(lenet, test_data[i], resMat, 10);
 		right += l == p;
-		if (i * 100 / total_size > percent)
-			printf("test:%2d%%\n", percent = i * 100 / total_size);
+//		if (i * 100 / total_size > percent)
+//			printf("test:%2d%%\n", percent = i * 100 / total_size);
 	}
 	return right;
 }
@@ -112,16 +112,19 @@ void foo()
 	int batches[] = { 300 };
 	for (int i = 0; i < sizeof(batches) / sizeof(*batches);++i)
 		training(lenet, train_data, train_label, batches[i],COUNT_TRAIN);
+    printf("Train Count:%d\nTrain Time:%us\n", COUNT_TRAIN,(unsigned)(time(0) - start));
+    start = time(0);
 	int right = testing(lenet, test_data, test_label, COUNT_TEST);
-	printf("%d/%d\n", right, COUNT_TEST);
-	printf("Time:%u\n", (unsigned)(time(0) - start));
+	printf("Test Accuracy:%d/%d\nTest Time:%us\n",right, COUNT_TEST, (unsigned)(time(0) - start));
 	//save(lenet, LENET_FILE);
 	free(lenet);
 	free(train_data);
 	free(train_label);
 	free(test_data);
 	free(test_label);
+#if (WIN32 || WIN64)
 	system("pause");
+#endif
 }
 
 int main()
