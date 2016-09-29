@@ -15,10 +15,13 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="lenet.c">
+    <ClCompile Include="main.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="main.c">
+    <ClCompile Include="predict.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="train.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
