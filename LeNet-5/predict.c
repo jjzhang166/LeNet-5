@@ -56,7 +56,7 @@ static void convolute_valid(double *src,double *conv,double *des,const long dh,c
 		((double *)output)[j] = action(((double *)output)[j] + bias[j]);                                    \
 }
 
-static void normalize(uint8 input[],double output[],int count)
+static void normalize(uint8_t input[],double output[],int count)
 {
 	double mean = 0, std = 0;
 	FOREACH(i, count)
@@ -80,20 +80,20 @@ static void forward(LeNet5 *lenet, Feature *features, double(*action)(double))
 	DOT_PRODUCT_FORWARD(features->layer5, features->output, lenet->weight5_6, lenet->bias5_6, action);
 }
 
-static void load_input(Feature *features, image input)
+static void load_input(Feature *features, image_t input)
 {
-	normalize((uint8 *)input, (double *)features->input, sizeof(image) / sizeof(uint8));
+	normalize((uint8_t *)input, (double *)features->input, sizeof(image_t) / sizeof(uint8_t));
 }
 
-static uint8 get_result(Feature *features, const char(*labels)[OUTPUT], uint8 count)
+static uint8_t get_result(Feature *features, const char(*labels)[OUTPUT], uint8_t count)
 {
 	double *output = (double *)features->output;
 	const int outlen = GETCOUNT(features->output);
-	uint8 result = 0;
+	uint8_t result = 0;
 	double minvalue = 0;
     FOREACH(j, outlen)
     minvalue += (output[j] - labels[0][j])*(output[j] - labels[0][j]);
-	for (uint8 i = 1; i < count; ++i)
+	for (uint8_t i = 1; i < count; ++i)
 	{
 		double sum = 0;
 		FOREACH(j, outlen)
@@ -107,7 +107,7 @@ static uint8 get_result(Feature *features, const char(*labels)[OUTPUT], uint8 co
 	return result;
 }
 
-uint8 predict(LeNet5 *lenet, image input, const char (*resMat)[OUTPUT],uint8 count)
+uint8_t predict(LeNet5 *lenet, image_t input, const char (*resMat)[OUTPUT],uint8_t count)
 {
 	Feature features = { 0 };
 	load_input(&features, input);
@@ -119,7 +119,7 @@ void initial(LeNet5 *lenet)
 {
     srand((unsigned int)time(0));
 	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->bias0_1; *pos++ = (2.0 / RAND_MAX) * rand() - 1);
-	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->weight2_3; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (INPUT + LAYER1))));
+	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->weight2_3; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (LAYER0 + LAYER1))));
 	for (double *pos = (double *)lenet->weight2_3; pos < (double *)lenet->weight4_5; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (LAYER2 + LAYER3))));
 	for (double *pos = (double *)lenet->weight4_5; pos < (double *)lenet->weight5_6; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL1 * LENGTH_KERNEL1 * (LAYER4 + LAYER5))));
 	for (double *pos = (double *)lenet->weight5_6; pos < (double *)lenet->bias0_1; *pos++ *= sqrt(6.0 / (LAYER5 + OUTPUT)));

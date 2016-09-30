@@ -27,7 +27,7 @@ void initial(LeNet5 *lenet);
 #define LENGTH_FEATURE5	1//(LENGTH_INPUT_4 - LENGTH_KERNEL + 1)
 #define LENGTH_FEATURE6	1
 
-#define INPUT			1
+#define LAYER0			1
 #define LAYER1			6
 #define LAYER2			6
 #define LAYER3			16
@@ -37,12 +37,12 @@ void initial(LeNet5 *lenet);
 
 #define ALPHA 0.05
 
-typedef unsigned char uint8;
-typedef uint8 image[LENGTH_FEATURE0][LENGTH_FEATURE0];
+typedef unsigned char uint8_t;
+typedef uint8_t image_t[LENGTH_FEATURE0][LENGTH_FEATURE0];
 
 typedef struct LeNet5
 {
-	double weight0_1[INPUT][LAYER1][LENGTH_KERNEL0][LENGTH_KERNEL0];
+	double weight0_1[LAYER0][LAYER1][LENGTH_KERNEL0][LENGTH_KERNEL0];
 	double weight2_3[LAYER2][LAYER3][LENGTH_KERNEL0][LENGTH_KERNEL0];
 	double weight4_5[LAYER4][LAYER5][LENGTH_KERNEL1][LENGTH_KERNEL1];
 	double weight5_6[LAYER5 * LENGTH_FEATURE6 * LENGTH_FEATURE6][OUTPUT];
@@ -56,7 +56,7 @@ typedef struct LeNet5
 
 typedef struct Feature
 {
-	double input[INPUT][LENGTH_FEATURE0][LENGTH_FEATURE0];
+	double input[LAYER0][LENGTH_FEATURE0][LENGTH_FEATURE0];
 	double layer1[LAYER1][LENGTH_FEATURE1][LENGTH_FEATURE1];
 	double layer2[LAYER2][LENGTH_FEATURE2][LENGTH_FEATURE2];
 	double layer3[LAYER3][LENGTH_FEATURE3][LENGTH_FEATURE3];
@@ -65,8 +65,10 @@ typedef struct Feature
 	double output[OUTPUT];
 }Feature;
 
-void train(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT],uint8 *labels, int batchSize);
+void train_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uint8_t *labels, const int batchSize);
 
-uint8 predict(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT], uint8 count);
+void predict_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT], uint8_t labelCount, const int batchSize, uint8_t *labels);
+
+uint8_t predict(LeNet5 *lenet, image_t input, const char(*resMat)[OUTPUT], uint8_t count);
 
 void initial(LeNet5 *lenet);

@@ -40,27 +40,29 @@ int read_data(unsigned char(*data)[28][28], unsigned char label[], const int cou
 	return 0;
 }
 
-void training(LeNet5 *lenet, image *train_data, uint8 *train_label, int batch_size, int total_size)
+void training(LeNet5 *lenet, image_t *train_data, uint8_t *train_label, int batch_size, int total_size)
 {
 	for (int i = 0, percent = 0; i <= total_size - batch_size; i += batch_size)
 	{
-		train(lenet, train_data + i, resMat, train_label + i, batch_size);
-		if (i * 100 / total_size > percent)
-			printf("batchsize:%d\ttrain:%2d%%\n", batch_size, percent = i * 100 / total_size);
+		train_batch(lenet, train_data + i, resMat, train_label + i, batch_size);
+		//if (i * 100 / total_size > percent)
+		//	printf("batchsize:%d\ttrain:%2d%%\n", batch_size, percent = i * 100 / total_size);
 	}
 }
 
-int testing(LeNet5 *lenet, image *test_data, uint8 *test_label,int total_size)
+int testing(LeNet5 *lenet, image_t *test_data, uint8_t *test_label,int total_size)
 {
-	int right = 0, percent = 0;
+	int right = 0;
+	uint8_t *result = (uint8_t *)calloc(COUNT_TEST, sizeof(uint8_t));
+	predict_batch(lenet, test_data, resMat, 10, total_size, result);
 	for (int i = 0; i < total_size; ++i)
 	{
-		uint8 l = test_label[i];
-		int p = predict(lenet, test_data[i], resMat, 10);
-		right += l == p;
-//		if (i * 100 / total_size > percent)
-//			printf("test:%2d%%\n", percent = i * 100 / total_size);
+		//uint8_t l = test_label[i];
+		//int p = predict(lenet, test_data[i], resMat, 10);
+		//right += l == p;
+		right += test_label[i] == result[i];
 	}
+	free(result);
 	return right;
 }
 
@@ -85,10 +87,10 @@ int load(LeNet5 *lenet, const char filename[])
 
 void foo()
 {
-	image *train_data = (image *)calloc(COUNT_TRAIN, sizeof(image));
-	uint8 *train_label = (uint8 *)calloc(COUNT_TRAIN, sizeof(uint8));
-	image *test_data = (image *)calloc(COUNT_TEST, sizeof(image));
-	uint8 *test_label = (uint8 *)calloc(COUNT_TEST, sizeof(uint8));
+	image_t *train_data = (image_t *)calloc(COUNT_TRAIN, sizeof(image_t));
+	uint8_t *train_label = (uint8_t *)calloc(COUNT_TRAIN, sizeof(uint8_t));
+	image_t *test_data = (image_t *)calloc(COUNT_TEST, sizeof(image_t));
+	uint8_t *test_label = (uint8_t *)calloc(COUNT_TEST, sizeof(uint8_t));
 	if (read_data(train_data, train_label, COUNT_TRAIN, FILE_TRAIN_IMAGE, FILE_TRAIN_LABEL))
 	{
 		printf("ERROR!!!\nDataset File Not Find!Please Copy Dataset to the Floder Included the exe\n");
@@ -108,14 +110,19 @@ void foo()
 	LeNet5 *lenet = (LeNet5 *)malloc(sizeof(LeNet5));
 	if (load(lenet, LENET_FILE))
 		initial(lenet);
-	clock_t start = time(0);
+	
+	time_t t0 = time(0),t1,t2;
+	printf("Start Train...\n");
 	int batches[] = { 300 };
 	for (int i = 0; i < sizeof(batches) / sizeof(*batches);++i)
 		training(lenet, train_data, train_label, batches[i],COUNT_TRAIN);
-    printf("Train Count:%d\nTrain Time:%us\n", COUNT_TRAIN,(unsigned)(time(0) - start));
-    start = time(0);
+	t1 = time(0);
+    printf("Train Count:%d\nTrain Time:%us\n", COUNT_TRAIN,(unsigned)(t1 - t0));
+	printf("Start Test...\n");
 	int right = testing(lenet, test_data, test_label, COUNT_TEST);
-	printf("Test Accuracy:%d/%d\nTest Time:%us\n",right, COUNT_TEST, (unsigned)(time(0) - start));
+	t2 = time(0);
+	printf("Test Accuracy:%d/%d\nTest Time:%us\n",right, COUNT_TEST, (unsigned)(t2 - t1));
+	printf("Total Time:%us\n", (unsigned)(t2 - t0));
 	//save(lenet, LENET_FILE);
 	free(lenet);
 	free(train_data);
