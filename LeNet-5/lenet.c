@@ -3,7 +3,6 @@
 #include <float.h>
 #include <time.h>
 #include <stdlib.h>
-#include <omp.h>
 #include <math.h>
 
 #define GETLENGTH(array) (sizeof(array)/sizeof(*(array)))
