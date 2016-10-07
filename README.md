@@ -40,7 +40,7 @@ make
 4.使用editbin修改程序栈大小为8MB
 editbin /Stack:8000000 LeNet_5.exe
 5.运行
-./LeNet_5
+LeNet_5.exe
 
 ### API
 #####批量训练
