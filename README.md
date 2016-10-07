@@ -12,11 +12,11 @@ main.c文件为MNIST数据集的识别DEMO，直接编译即可运行，训练�
 ### 项目环境
 该项目为CMAKE项目，建议采用clang编译。运行平台的处理器必须支持AVX指令集。
 
-####Linux macOS
+####Linux
 0.安装cmake
 1.安装gcc或clang
 2.使用cmake生成makefile（以clang为例）
-cmake -DCMAKE_C_COMPILER=clang -DCMAKE_C_FLAGS=-openmp
+cmake -DCMAKE_C_COMPILER=clang -DCMAKE_C_FLAGS=-fopenmp
 make
 3.运行
 ./LeNet_5
