@@ -60,6 +60,6 @@ void train_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uin
 
 void predict_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT], uint8_t labelCount, const int batchSize, uint8_t *results);
 
-uint8_t predict(LeNet5 *lenet, image_t input, const char(*resMat)[OUTPUT], uint8_t count);
+uint8_t predict(LeNet5 *lenet, image_t input, const char(*resMat)[OUTPUT], uint8_t labelCount);
 
 void initial(LeNet5 *lenet);

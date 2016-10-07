@@ -122,12 +122,12 @@ static uint8_t get_result(Feature *features, const char(*labels)[OUTPUT], uint8_
 	return result;
 }
 
-uint8_t predict(LeNet5 *lenet, image_t input, const char (*resMat)[OUTPUT],uint8_t count)
+uint8_t predict(LeNet5 *lenet, image_t input, const char (*resMat)[OUTPUT],uint8_t labelCount)
 {
 	Feature features = { 0 };
 	load_input(&features, input);
 	forward(lenet, &features, tanh);
-	return get_result(&features, resMat, count);
+	return get_result(&features, resMat, labelCount);
 }
 
 void initial(LeNet5 *lenet)
