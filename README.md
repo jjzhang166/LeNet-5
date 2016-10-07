@@ -14,8 +14,8 @@ main.c文件为MNIST数据集的识别DEMO，直接编译即可运行，训练�
 
 ####Linux
 0.安装cmake
-1.安装gcc或clang
-2.使用cmake生成makefile（以clang为例）
+1.安装clang
+2.使用cmake生成makefile
 cmake -DCMAKE_C_COMPILER=clang -DCMAKE_C_FLAGS=-fopenmp
 make
 3.运行
