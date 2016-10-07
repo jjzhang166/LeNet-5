@@ -45,8 +45,8 @@ void training(LeNet5 *lenet, image_t *train_data, uint8_t *train_label, int batc
 	for (int i = 0, percent = 0; i <= total_size - batch_size; i += batch_size)
 	{
 		train_batch(lenet, train_data + i, resMat, train_label + i, batch_size);
-		//if (i * 100 / total_size > percent)
-		//	printf("batchsize:%d\ttrain:%2d%%\n", batch_size, percent = i * 100 / total_size);
+		if (i * 100 / total_size > percent)
+			printf("batchsize:%d\ttrain:%2d%%\n", batch_size, percent = i * 100 / total_size);
 	}
 }
 
@@ -97,6 +97,7 @@ void foo()
 		free(train_data);
 		free(train_label);
 		system("pause");
+        return;
 	}
 	if (read_data(test_data, test_label, COUNT_TEST, FILE_TEST_IMAGE, FILE_TEST_LABEL))
 	{
@@ -104,6 +105,7 @@ void foo()
 		free(test_data);
 		free(test_label);
 		system("pause");
+        return;
 	}
 
 

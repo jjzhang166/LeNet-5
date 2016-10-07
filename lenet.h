@@ -16,6 +16,8 @@ void initial(LeNet5 *lenet);
 
 #pragma once
 
+
+
 #define LENGTH_KERNEL0	5
 #define LENGTH_KERNEL1	4
 
@@ -54,20 +56,9 @@ typedef struct LeNet5
 
 }LeNet5;
 
-typedef struct Feature
-{
-	double input[LAYER0][LENGTH_FEATURE0][LENGTH_FEATURE0];
-	double layer1[LAYER1][LENGTH_FEATURE1][LENGTH_FEATURE1];
-	double layer2[LAYER2][LENGTH_FEATURE2][LENGTH_FEATURE2];
-	double layer3[LAYER3][LENGTH_FEATURE3][LENGTH_FEATURE3];
-	double layer4[LAYER4][LENGTH_FEATURE4][LENGTH_FEATURE4];
-	double layer5[LAYER5][LENGTH_FEATURE5][LENGTH_FEATURE5];
-	double output[OUTPUT];
-}Feature;
-
 void train_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uint8_t *labels, const int batchSize);
 
-void predict_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT], uint8_t labelCount, const int batchSize, uint8_t *labels);
+void predict_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT], uint8_t labelCount, const int batchSize, uint8_t *results);
 
 uint8_t predict(LeNet5 *lenet, image_t input, const char(*resMat)[OUTPUT], uint8_t count);
 

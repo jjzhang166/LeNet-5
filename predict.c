@@ -3,8 +3,23 @@
 #include <time.h>
 #include <stdlib.h>
 
+#ifndef __AVX__
+#error Please Add Build Variant -mavx
+#endif //__AVX__
+
 static void vector_x_matrix(double *src,double *mat,double *des,long height,long width);
 static void convolute_valid(double *src,double *conv,double *des,const long dh,const long dw,const long ch,const long cw);
+
+typedef struct Feature
+{
+    double input[LAYER0][LENGTH_FEATURE0][LENGTH_FEATURE0];
+    double layer1[LAYER1][LENGTH_FEATURE1][LENGTH_FEATURE1];
+    double layer2[LAYER2][LENGTH_FEATURE2][LENGTH_FEATURE2];
+    double layer3[LAYER3][LENGTH_FEATURE3][LENGTH_FEATURE3];
+    double layer4[LAYER4][LENGTH_FEATURE4][LENGTH_FEATURE4];
+    double layer5[LAYER5][LENGTH_FEATURE5][LENGTH_FEATURE5];
+    double output[OUTPUT];
+}Feature;
 
 #define GETLENGTH(array) (sizeof(array)/sizeof(*(array)))
 
@@ -127,7 +142,6 @@ void initial(LeNet5 *lenet)
 }
 
 const static unsigned long long mask[] ={0x8000000000000000L,0x8000000000000000L,0x8000000000000000L,0x8000000000000000L,0,0,0,0};
-
 
 static void vector_x_matrix(double *src,double *mat,double *des,const long height,const long width)
 {

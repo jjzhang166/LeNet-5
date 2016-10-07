@@ -11,6 +11,10 @@
 #include <stdlib.h>
 #include <math.h>
 
+#ifndef __AVX__
+#error Please Add Build Variant -mavx
+#endif //__AVX__
+
 //AVX指令集用到的YMM寄存器存储空间大小
 #define SZYMM   32
 //YMM寄存器可存储双精度浮点数个数
@@ -20,9 +24,9 @@ typedef double pack_t[SZPACK];
 
 static void convolute_valid1(pack_t *src,double *conv,pack_t *des,const long dh,const long dw,const long ch,const long cw);
 static void convolute_valid2(pack_t *src,pack_t *conv,double *des,const long dh,const long dw,const long ch,const long cw);
-static void convolute_full(pack_t *src,double *conv,pack_t *des,long sh,long sw,long ch,long cw);
-static void vector_x_matrix(pack_t *src,double *mat,pack_t *des,long height,long width);
-static void matrix_x_vector(double *mat,pack_t *src,pack_t *des,long height,long width);
+static void convolute_full(pack_t *src,double *conv,pack_t *des,const long sh,const long sw,const long ch,const long cw);
+static void vector_x_matrix(pack_t *src,double *mat,pack_t *des,const long height,const long width);
+static void matrix_x_vector(double *mat,pack_t *src,pack_t *des,const long height,const long width);
 static void subsamp_max_forward(pack_t *src,pack_t *des,const long sh,const long sw,const long dh,const long dw);
 static void subsamp_max_backward(pack_t *srcl,pack_t *desl,pack_t *src,pack_t *des,const long sh,const long sw,const long dh,const long dw);
 static void get_result(pack_t output[OUTPUT], const char(*resMat)[OUTPUT], const uint8_t labelCount, uint8_t labels[SZPACK], uint8_t szpack);
@@ -87,7 +91,7 @@ typedef struct FeaturePack
 {																			\
 	for (int x = 0; x < GETLENGTH(weight); ++x)								\
 		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
-			CONVOLUTE_FULL(outerror[y], inerror[x], weight[x][y]);			\
+			CONVOLUTE_FULL(outerror[y], inerror[x], weight[x][y]);          \
 	FOREACH(x, sizeof(inerror) / sizeof(double))							\
 		((double *)inerror)[x] *= actiongrad(((double *)input)[x]);         \
 	FOREACH(x, GETLENGTH(outerror))											\
@@ -229,20 +233,18 @@ void train_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uin
     ((double *)lenet)[i] += k * dlenet[i];
 }
 
-void predict_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uint8_t labelCount, const int batchSize, uint8_t *labels)
+void predict_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uint8_t labelCount, const int batchSize, uint8_t *results)
 {
-	double dlenet[ALIGN(sizeof(LeNet5), sizeof(pack_t))] = { 0 };
 	uint8_t szload = SZPACK;
-	int i = 0;
 #pragma omp parallel for
-	for (i = 0; i < (batchSize + SZPACK - 1) / SZPACK; i++)
+	for (int i = 0; i < (batchSize + SZPACK - 1) / SZPACK; i++)
 	{
 		szload -= (i == batchSize / SZPACK) * (SZPACK - batchSize % SZPACK);
 		char buffer[sizeof(FeaturePack) + sizeof(pack_t) - 1] = { 0 };
 		FeaturePack *featurePack = (FeaturePack *)ALIGN((unsigned long)buffer, sizeof(pack_t));
 		load_input(featurePack->layer0, inputs + i * SZPACK, szload);
 		forward(lenet, featurePack, tanh);
-		get_result(featurePack->output, resMat, labelCount, labels + i*SZPACK, szload);
+		get_result(featurePack->output, resMat, labelCount, results + i*SZPACK, szload);
 	}
 }
 
@@ -279,13 +281,7 @@ static void get_result(pack_t output[OUTPUT], const char(*resMat)[OUTPUT], const
 		labels[i] = (uint8_t)result[i];
 }
 
-static void convolute_valid1(pack_t *src,
-                             double *conv,
-                             pack_t *des,
-                             const long dh,
-                             const long dw,
-                             const long ch,
-                             const long cw)
+static void convolute_valid1(pack_t *src, double *conv, pack_t *des, const long dh, const long dw, const long ch, const long cw)
 {
     const long sw = dw + cw - 1;
     for(long d0=0;d0<dh;++d0)
@@ -307,13 +303,7 @@ static void convolute_valid1(pack_t *src,
         }
 }
 
-static void convolute_valid2(pack_t *src,
-                             pack_t *conv,
-                             double *des,
-                             const long dh,
-                             const long dw,
-                             const long ch,
-                             const long cw)
+static void convolute_valid2(pack_t *src, pack_t *conv, double *des, const long dh,const long dw, const long ch, const long cw)
 {
     const long sw = dw + cw - 1;
     for(long d0 = 0;d0 < dh;++d0)
@@ -331,7 +321,7 @@ static void convolute_valid2(pack_t *src,
                 }
             asm("                               \
                 vextractf128 $1, %%ymm0, %%xmm1;\
-                vhaddpd %%xmm1, %%xmm0, %%xmm0; \
+                vaddpd %%xmm1, %%xmm0, %%xmm0;  \
                 vhaddpd %%xmm0, %%xmm0, %%xmm0; \
                 vaddsd  (%0), %%xmm0, %%xmm0;   \
                 vmovsd  %%xmm0, (%0);           \
@@ -340,28 +330,29 @@ static void convolute_valid2(pack_t *src,
         }
 }
 
-static void convolute_full(pack_t *src, double *conv, pack_t *des, long sh, long sw, long ch, long cw)
+static void convolute_full(pack_t *src, double *conv, pack_t *des, const long sh, const long sw, const long ch, const long cw)
 {
 	const long dw = sw + cw - 1;
 	for (long s0 = 0; s0 < sh; ++s0)
 		for (long s1 = 0; s1 < sw; ++s1)
 		{
-			asm("vmovapd (%0), %%ymm1;"::"r"(src + s0 * sw + s1) : "%ymm1");
+			asm("vmovapd (%0), %%ymm0;"::"r"(src + s0 * sw + s1) : "%ymm0");
 			for (long c0 = 0; c0 < ch; ++c0)
 				for (long c1 = 0; c1 < cw; ++c1)
 				{
 					asm("                                   \
-                        vbroadcastsd %0, %%ymm2;            \
-                        vmovapd (%1), %%ymm0;               \
-                        vfmadd231pd %%ymm2, %%ymm1, %%ymm0; \
-                        vmovapd %%ymm0, (%1);               \
+                        vbroadcastsd %0, %%ymm1;            \
+                        vfmadd213pd (%1), %%ymm0, %%ymm1;   \
+                        vmovapd %%ymm1, (%1);               \
                         "::"m"(conv[c0 * cw + c1]), "r"(des + (s0 + c0) * dw + s1 + c1)
-						: "%ymm0", "%ymm1", "%ymm2");
+						: "%ymm0", "%ymm1");
 				}
 		}
 }
 
-static void vector_x_matrix(pack_t *src, double *mat, pack_t *des, long height, long width)
+
+
+static void vector_x_matrix(pack_t *src, double *mat, pack_t *des, const long height, const long width)
 {
 	for (long y = 0; y < width; ++y)
 	{
@@ -378,7 +369,7 @@ static void vector_x_matrix(pack_t *src, double *mat, pack_t *des, long height, 
 	}
 }
 
-static void matrix_x_vector(double *mat, pack_t *src, pack_t *des, long height, long width)
+static void matrix_x_vector(double *mat, pack_t *src, pack_t *des, const long height, const long width)
 {
 	for (long x = 0; x < height; ++x)
 	{
