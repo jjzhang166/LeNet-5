@@ -27,41 +27,41 @@ typedef struct Feature
 
 #define FOREACH(i,count) for (int i = 0; i < count; ++i)
 
-#define CONVOLUTE_VALID(input,output,weight)											\
-{																						\
+#define CONVOLUTE_VALID(input,output,weight)                                            \
+{                                                                                       \
     convolute_valid((double *)(input),(double *)(weight),(double *)(output),            \
         GETLENGTH(output),GETLENGTH(*(output)),GETLENGTH(weight),GETLENGTH(*(weight))); \
 }
 
-#define CONVOLUTION_FORWARD(input,output,weight,bias,action)					\
-{																				\
-	for (int x = 0; x < GETLENGTH(weight); ++x)									\
-		for (int y = 0; y < GETLENGTH(*weight); ++y)							\
-			CONVOLUTE_VALID(input[x], output[y], weight[x][y]);					\
-	FOREACH(j, GETLENGTH(output))												\
-		FOREACH(i, GETCOUNT(output[j]))											\
-		((double *)output[j])[i] = action(((double *)output[j])[i] + bias[j]);	\
+#define CONVOLUTION_FORWARD(input,output,weight,bias,action)                    \
+{                                                                               \
+	for (int x = 0; x < GETLENGTH(weight); ++x)                                 \
+		for (int y = 0; y < GETLENGTH(*weight); ++y)                            \
+			CONVOLUTE_VALID(input[x], output[y], weight[x][y]);                 \
+	FOREACH(j, GETLENGTH(output))                                               \
+		FOREACH(i, GETCOUNT(output[j]))                                         \
+		((double *)output[j])[i] = action(((double *)output[j])[i] + bias[j]);  \
 }
 
 
-#define SUBSAMP_MAX_FORWARD(input,output)														\
-{																								\
-	const int len0 = GETLENGTH(*(input)) / GETLENGTH(*(output));								\
-	const int len1 = GETLENGTH(**(input)) / GETLENGTH(**(output));								\
-	FOREACH(i, GETLENGTH(output))																\
-	FOREACH(o0, GETLENGTH(*(output)))															\
-	FOREACH(o1, GETLENGTH(**(output)))															\
-	{																							\
-		int x0 = 0, x1 = 0, ismax;																\
-		FOREACH(l0, len0)																		\
-			FOREACH(l1, len1)																	\
-		{																						\
+#define SUBSAMP_MAX_FORWARD(input,output)                                                       \
+{                                                                                               \
+	const int len0 = GETLENGTH(*(input)) / GETLENGTH(*(output));                                \
+	const int len1 = GETLENGTH(**(input)) / GETLENGTH(**(output));                              \
+	FOREACH(i, GETLENGTH(output))                                                               \
+	FOREACH(o0, GETLENGTH(*(output)))                                                           \
+	FOREACH(o1, GETLENGTH(**(output)))                                                          \
+	{                                                                                           \
+		int x0 = 0, x1 = 0, ismax;                                                              \
+		FOREACH(l0, len0)                                                                       \
+			FOREACH(l1, len1)                                                                   \
+		{                                                                                       \
 			ismax = input[i][o0*len0 + l0][o1*len1 + l1] > input[i][o0*len0 + x0][o1*len1 + x1];\
-			x0 += ismax * (l0 - x0);															\
-			x1 += ismax * (l1 - x1);															\
-		}																						\
-		output[i][o0][o1] = input[i][o0*len0 + x0][o1*len1 + x1];								\
-	}																							\
+			x0 += ismax * (l0 - x0);                                                            \
+			x1 += ismax * (l1 - x1);                                                            \
+		}                                                                                       \
+		output[i][o0][o1] = input[i][o0*len0 + x0][o1*len1 + x1];                               \
+	}                                                                                           \
 }
 
 #define DOT_PRODUCT_FORWARD(input,output,weight,bias,action)                                                \
@@ -178,7 +178,7 @@ static void convolute_valid(double *src,double *conv,double *des,const long dh,c
             {
                 for(long c1=0;c1<cw;++c1)
                 {
-                    asm("                                       \
+                        asm("                                       \
                         vbroadcastsd %0, %%ymm1;                \
                         vmaskmovpd (%1,%2,8), %%ymm3, %%ymm2;   \
                         vfmadd231pd %%ymm2, %%ymm1, %%ymm0;     \
