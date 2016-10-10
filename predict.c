@@ -178,7 +178,7 @@ static void convolute_valid(double *src,double *conv,double *des,const long dh,c
             {
                 for(long c1=0;c1<cw;++c1)
                 {
-                        asm("                                       \
+                    asm("                                       \
                         vbroadcastsd %0, %%ymm1;                \
                         vmaskmovpd (%1,%2,8), %%ymm3, %%ymm2;   \
                         vfmadd231pd %%ymm2, %%ymm1, %%ymm0;     \
