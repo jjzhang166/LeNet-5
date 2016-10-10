@@ -275,7 +275,7 @@ static void get_result(pack_t output[OUTPUT], const char(*resMat)[OUTPUT], const
             vbroadcastsd %0, %%ymm1;			\
             vmaskmovpd %%ymm1, %%ymm2, (%1);	\
             "::"m"(j), "r"(result)
-			: "%ymm0", "%ymm1", "%ymm2");
+			: "%ymm0", "%ymm1", "%ymm2","memory");
 	}
 	for (long i = 0; i < szpack; ++i)
 		labels[i] = (uint8_t)result[i];
