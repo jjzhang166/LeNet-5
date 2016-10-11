@@ -10,7 +10,7 @@ MNIST手写字符集初代训练识别率97%，多代训练识别率98%。
 main.c文件为MNIST数据集的识别DEMO，直接编译即可运行，训练集60000张，测试集10000张。
 
 ### 项目环境
-该项目为CMAKE项目，建议采用clang编译。运行平台的处理器必须支持AVX指令集。
+该项目为CMAKE项目，建议采用llvm.org版的clang编译。运行平台的处理器必须支持AVX指令集。
 
 ####Linux
 0.安装cmake
@@ -21,10 +21,22 @@ make
 3.运行
 ./LeNet_5
 
+####macOS
+0.安装llvm.org官方原版(非苹果定制版）的clang，安装步骤如下：
+在http://llvm.org/releases/download.html下载macOS版clang
+使用tar xvz命令解压，并将文件夹内的内容复制进/usr/local文件夹内合并
+由于与苹果定制版的编译器文件名冲突，使用时需输入带版本号的名称，例如clang-3.9 xxx.c -o a.out
+1.安装cmake
+2.使用cmake生成makefile，编译器需输入带版本号的名称(以clang-3.9为例）
+cmake -DCMAKE_C_COMPILER=clang-3.9 -DCMAKE_C_FLAGS=-fopenmp
+make
+3.运行
+./LeNet_5
+
 ####Windows
 0.安装Visual Studio
 1.安装cmake
-2.从官网下载并安装clang
+2.从官网下载并安装clang,并配置环境变量
 3.打开Visual Studio开发人员命令提示，并进入项目文件夹
 cmake -DCMAKE_C_COMPILER=clang -DCMAKE_C_FLAGS=-fopenmp
 make
