@@ -25,10 +25,9 @@ make
 0.安装llvm.org官方原版(非苹果定制版）的clang，安装步骤如下：
 在http://llvm.org/releases/download.html下载macOS版clang
 使用tar xvz命令解压，并将文件夹内的内容复制进/usr/local文件夹内合并
-由于与苹果定制版的编译器文件名冲突，使用时需输入带版本号的名称，例如clang-3.9 xxx.c -o a.out
 1.安装cmake
-2.使用cmake生成makefile，编译器需输入带版本号的名称(以clang-3.9为例）
-cmake -DCMAKE_C_COMPILER=clang-3.9 -DCMAKE_C_FLAGS=-fopenmp
+2.使用cmake生成makefile
+cmake -DCMAKE_C_COMPILER=clang -DCMAKE_C_FLAGS=-fopenmp
 make
 3.运行
 ./LeNet_5
