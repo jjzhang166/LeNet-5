@@ -16,7 +16,7 @@ main.c文件为MNIST数据集的识别DEMO，直接编译即可运行，训练�
 0.安装cmake
 1.安装clang
 2.使用cmake生成makefile
-cmake -DCMAKE_C_COMPILER=clang -DCMAKE_C_FLAGS=-fopenmp
+cmake -DCMAKE_C_COMPILER=clang
 make
 3.运行
 ./LeNet_5
@@ -27,7 +27,7 @@ make
 使用tar xvz命令解压，并将文件夹内的内容复制进/usr/local文件夹内合并
 1.安装cmake
 2.使用cmake生成makefile
-cmake -DCMAKE_C_COMPILER=clang -DCMAKE_C_FLAGS=-fopenmp
+cmake -DCMAKE_C_COMPILER=clang
 make
 3.运行
 ./LeNet_5
@@ -37,7 +37,7 @@ make
 1.安装cmake
 2.从官网下载并安装clang,并配置环境变量
 3.打开Visual Studio开发人员命令提示，并进入项目文件夹
-cmake -DCMAKE_C_COMPILER=clang -DCMAKE_C_FLAGS=-fopenmp
+cmake -DCMAKE_C_COMPILER=clang
 make
 4.使用editbin修改程序栈大小为8MB
 editbin /Stack:8000000 LeNet_5.exe
