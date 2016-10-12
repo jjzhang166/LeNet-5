@@ -23,7 +23,7 @@ make
 
 ####macOS
 0.安装llvm.org官方原版(非苹果定制版）的clang，安装步骤如下：
-在http://llvm.org/releases/download.html下载macOS版clang
+在http://llvm.org/releases/download.html 下载macOS版clang
 使用tar xvz命令解压，并将文件夹内的内容复制进/usr/local文件夹内合并
 1.安装cmake
 2.使用cmake生成makefile
