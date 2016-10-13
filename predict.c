@@ -149,18 +149,18 @@ static void vector_x_matrix(double *src,double *mat,double *des,const long heigh
     asm("vmovupd (%0), %%ymm3;"::"r"(mask):"%ymm3");
     for(long w=0;w<width;w+=4)
     {
-        if(w==lastw) asm("vmovupd (%0,%1,8), %%ymm3;"::"r"(mask),"r"(4 - (width & 3)):"%ymm3");
-        asm("vmaskmovpd (%0,%1,8), %%ymm3, %%ymm0;"::"r"(des),"r"(w):"%ymm0","%ymm3");
+		if (w == lastw) asm("vmovupd (%0), %%ymm3;"::"r"(mask + (4 - (width & 3) << 3)) : "%ymm3");
+		asm("vmaskmovpd (%0), %%ymm3, %%ymm0;"::"r"(des + (w << 3)) : "%ymm0", "%ymm3");
         for(long h=0;h<height;h++)
         {
             asm("                                           \
                 vbroadcastsd %0, %%ymm1;                    \
-                vmaskmovpd (%1,%2,8), %%ymm3, %%ymm2;       \
+                vmaskmovpd (%1), %%ymm3, %%ymm2;       \
                 vfmadd231pd %%ymm1, %%ymm2, %%ymm0;         \
-                "::"m"(src[h]),"r"(mat),"r"(h * width + w)
+                "::"m"(src[h]),"r"(mat + (h * width + w << 3))
                 :"%ymm0","%ymm1","%ymm2","%ymm3");
         }
-        asm("vmaskmovpd %%ymm0, %%ymm3, (%0, %1, 8);"::"r"(des),"r"(w):"%ymm0","%ymm3");
+		asm("vmaskmovpd %%ymm0, %%ymm3, (%0);"::"r"(des + (w << 3)) : "%ymm0", "%ymm3");
     }
 }
 
@@ -170,23 +170,23 @@ static void convolute_valid(double *src,double *conv,double *des,const long dh,c
     asm("vmovupd (%0), %%ymm3;"::"r"(mask):"%ymm3");
     for(long d1 = 0;d1 < dw;d1 += 4)
     {
-        if(d1==lastw) asm("vmovupd (%0,%1,8), %%ymm3;"::"r"(mask),"r"(4 - (dw & 3)):"%ymm3");
+        if(d1==lastw) asm("vmovupd (%0), %%ymm3;"::"r"(mask + (4 - (dw & 3) << 3)):"%ymm3");
         for(long d0 = 0;d0 < dh;++d0)
         {
-            asm("vmovupd (%0,%1,8),%%ymm0;"::"r"(des),"r"(d0 * dw + d1):"%ymm0","%ymm3");
+			asm("vmovupd (%0),%%ymm0;"::"r"(des + (d0 * dw + d1 << 3)) : "%ymm0", "%ymm3");
             for(long c0=0;c0<ch;++c0)
             {
                 for(long c1=0;c1<cw;++c1)
                 {
-                    asm("                                       \
+					asm("                                       \
                         vbroadcastsd %0, %%ymm1;                \
-                        vmaskmovpd (%1,%2,8), %%ymm3, %%ymm2;   \
+                        vmaskmovpd (%1), %%ymm3, %%ymm2;   \
                         vfmadd231pd %%ymm2, %%ymm1, %%ymm0;     \
-                        "::"m"(conv[c0 * cw + c1]),"r"(src),"r"((c0 + d0) * sw + c1 + d1)
+                        "::"m"(conv[c0 * cw + c1]), "r"(src + ((c0 + d0) * sw + c1 + d1 << 3))
                         :"%ymm0","%ymm1","%ymm2","%ymm3");
                 }
             }
-            asm("vmaskmovpd %%ymm0, %%ymm3, (%0,%1,8);"::"r"(des),"r"(d0 * dw + d1):"%ymm0","%ymm3");
+			asm("vmaskmovpd %%ymm0, %%ymm3, (%0);"::"r"(des + (d0 * dw + d1 << 3)) : "%ymm0", "%ymm3");
         }
     }
 }

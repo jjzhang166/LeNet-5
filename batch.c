@@ -215,7 +215,7 @@ void train_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uin
     {
 		szload -= (i == batchSize / SZPACK) * (SZPACK - batchSize % SZPACK);
         char buffer[sizeof(FeaturePack) * 2 + ALIGN(sizeof(LeNet5), sizeof(pack_t)) + sizeof(pack_t) - 1] = { 0 };
-        FeaturePack *featurePack = (FeaturePack *)ALIGN((unsigned long)buffer, sizeof(pack_t));
+        FeaturePack *featurePack = (FeaturePack *)ALIGN((unsigned long long)buffer, sizeof(pack_t));
         FeaturePack *errorPack = featurePack + 1;
         LeNet5 *delta = (LeNet5 *)(errorPack + 1);
         load_input(featurePack->layer0, inputs + i * SZPACK, szload);
@@ -241,7 +241,7 @@ void predict_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],u
 	{
 		szload -= (i == batchSize / SZPACK) * (SZPACK - batchSize % SZPACK);
 		char buffer[sizeof(FeaturePack) + sizeof(pack_t) - 1] = { 0 };
-		FeaturePack *featurePack = (FeaturePack *)ALIGN((unsigned long)buffer, sizeof(pack_t));
+		FeaturePack *featurePack = (FeaturePack *)ALIGN((unsigned long long)buffer, sizeof(pack_t));
 		load_input(featurePack->layer0, inputs + i * SZPACK, szload);
 		forward(lenet, featurePack, tanh);
 		get_result(featurePack->output, resMat, labelCount, results + i*SZPACK, szload);
