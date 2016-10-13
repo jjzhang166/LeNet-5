@@ -1,92 +1,88 @@
-ï»¿# LeNet-5ç¥ç»ç½‘ç»œ
+# LeNet-5Éñ¾­ÍøÂç
 
-### ä»‹ç»
-æ ¹æ®YANN LECUNçš„è®ºæ–‡ã€ŠGradient-based Learning Applied To Document Recognitionã€‹è®¾è®¡çš„LeNet-5ç¥ç»ç½‘ç»œï¼ŒCè¯­è¨€å†™æˆï¼Œä¸ä¾èµ–ä»»ä½•ç¬¬ä¸‰æ–¹åº“ã€‚
-MNISTæ‰‹å†™å­—ç¬¦é›†åˆä»£è®­ç»ƒè¯†åˆ«ç‡97%ï¼Œå¤šä»£è®­ç»ƒè¯†åˆ«ç‡98%ã€‚
+### ½éÉÜ
+¸ù¾İYANN LECUNµÄÂÛÎÄ¡¶Gradient-based Learning Applied To Document Recognition¡·Éè¼ÆµÄLeNet-5Éñ¾­ÍøÂç£¬CÓïÑÔĞ´³É£¬²»ÒÀÀµÈÎºÎµÚÈı·½¿â¡£
+MNISTÊÖĞ´×Ö·û¼¯³õ´úÑµÁ·Ê¶±ğÂÊ97%£¬¶à´úÑµÁ·Ê¶±ğÂÊ98%¡£
 
-é‡‡ç”¨AVXæŒ‡ä»¤é›†ä¼˜åŒ–ï¼Œè¿è¡Œé€Ÿåº¦å¤§å¹…æå‡ã€‚
+²ÉÓÃAVXÖ¸Áî¼¯ÓÅ»¯£¬ÔËĞĞËÙ¶È´ó·ùÌáÉı¡£
 
 ### DEMO
-main.cæ–‡ä»¶ä¸ºMNISTæ•°æ®é›†çš„è¯†åˆ«DEMOï¼Œç›´æ¥ç¼–è¯‘å³å¯è¿è¡Œï¼Œè®­ç»ƒé›†60000å¼ ï¼Œæµ‹è¯•é›†10000å¼ ã€‚
+main.cÎÄ¼şÎªMNISTÊı¾İ¼¯µÄÊ¶±ğDEMO£¬Ö±½Ó±àÒë¼´¿ÉÔËĞĞ£¬ÑµÁ·¼¯60000ÕÅ£¬²âÊÔ¼¯10000ÕÅ¡£
 
-### é¡¹ç›®ç¯å¢ƒ
-è¯¥é¡¹ç›®ä¸ºCMAKEé¡¹ç›®ï¼Œå»ºè®®é‡‡ç”¨llvm.orgç‰ˆçš„clangç¼–è¯‘ã€‚è¿è¡Œå¹³å°çš„å¤„ç†å™¨å¿…é¡»æ”¯æŒAVXæŒ‡ä»¤é›†ã€‚
+### ÏîÄ¿»·¾³
+¸ÃÏîÄ¿ÎªCMAKEÏîÄ¿£¬½¨Òé²ÉÓÃllvm.org°æµÄclang±àÒë¡£ÔËĞĞÆ½Ì¨µÄ´¦ÀíÆ÷±ØĞëÖ§³ÖAVXÖ¸Áî¼¯¡£
 
 ####Linux
-0.å®‰è£…cmake
-1.å®‰è£…clang
-2.ä½¿ç”¨cmakeç”Ÿæˆmakefile
+0.°²×°cmake
+1.°²×°clang
+2.Ê¹ÓÃcmakeÉú³Émakefile
 cmake -DCMAKE_C_COMPILER=clang
 make
-3.è¿è¡Œ
+3.ÔËĞĞ
 ./LeNet_5
 
 ####macOS
-0.å®‰è£…llvm.orgå®˜æ–¹åŸç‰ˆ(éè‹¹æœå®šåˆ¶ç‰ˆï¼‰çš„clangï¼Œå®‰è£…æ­¥éª¤å¦‚ä¸‹ï¼š
-åœ¨http://llvm.org/releases/download.html ä¸‹è½½macOSç‰ˆclang
-ä½¿ç”¨tar xvzå‘½ä»¤è§£å‹ï¼Œå¹¶å°†æ–‡ä»¶å¤¹å†…çš„å†…å®¹å¤åˆ¶è¿›/usr/localæ–‡ä»¶å¤¹å†…åˆå¹¶
-1.å®‰è£…cmake
-2.ä½¿ç”¨cmakeç”Ÿæˆmakefile
+0.°²×°llvm.org¹Ù·½Ô­°æ(·ÇÆ»¹û¶¨ÖÆ°æ£©µÄclang£¬°²×°²½ÖèÈçÏÂ£º
+ÔÚhttp://llvm.org/releases/download.html ÏÂÔØmacOS°æclang
+Ê¹ÓÃtar xvzÃüÁî½âÑ¹£¬²¢½«ÎÄ¼ş¼ĞÄÚµÄÄÚÈİ¸´ÖÆ½ø/usr/localÎÄ¼ş¼ĞÄÚºÏ²¢
+1.°²×°cmake
+2.Ê¹ÓÃcmakeÉú³Émakefile
 cmake -DCMAKE_C_COMPILER=clang
 make
-3.è¿è¡Œ
+3.ÔËĞĞ
 ./LeNet_5
 
 ####Windows
-0.å®‰è£…Visual Studio
-1.å®‰è£…cmake
-2.ä»å®˜ç½‘ä¸‹è½½å¹¶å®‰è£…clang,å¹¶é…ç½®ç¯å¢ƒå˜é‡
-3.æ‰“å¼€Visual Studioå¼€å‘äººå‘˜å‘½ä»¤æç¤ºï¼Œå¹¶è¿›å…¥é¡¹ç›®æ–‡ä»¶å¤¹
-cmake -DCMAKE_C_COMPILER=clang
-make
-4.ä½¿ç”¨editbinä¿®æ”¹ç¨‹åºæ ˆå¤§å°ä¸º8MB
-editbin /Stack:8000000 LeNet_5.exe
-5.è¿è¡Œ
+0.°²×°Visual Studio
+1.´Ó¹ÙÍøÏÂÔØ²¢°²×°clang,²¢ÅäÖÃ»·¾³±äÁ¿
+2.´ò¿ªVisual Studio¿ª·¢ÈËÔ±ÃüÁîÌáÊ¾£¬²¢½øÈëÏîÄ¿ÎÄ¼ş¼Ğ£¬ÔËĞĞ
+make.bat
+3.ÔËĞĞ
 LeNet_5.exe
 
 ### API
-#####æ‰¹é‡è®­ç»ƒ
-lenet:  LeNet5çš„æƒå€¼çš„æŒ‡é’ˆï¼ŒLeNet5ç¥ç»ç½‘ç»œçš„æ ¸å¿ƒ
+#####ÅúÁ¿ÑµÁ·
+lenet:  LeNet5µÄÈ¨ÖµµÄÖ¸Õë£¬LeNet5Éñ¾­ÍøÂçµÄºËĞÄ
 
-inputsï¼š è¦è®­ç»ƒçš„å¤šä¸ªå›¾ç‰‡å¯¹åº”unsigned charäºŒç»´æ•°ç»„çš„æ•°ç»„,æŒ‡å‘çš„äºŒç»´æ•°ç»„çš„batchSizeå€å¤§å°å†…å­˜ç©ºé—´æŒ‡é’ˆã€‚åœ¨MNISTæµ‹è¯•DEMOä¸­äºŒç»´æ•°ç»„ä¸º28x28ï¼Œæ¯ä¸ªäºŒç»´æ•°ç»„æ•°å€¼åˆ†åˆ«ä¸ºå¯¹åº”ä½ç½®å›¾åƒåƒç´ ç°åº¦å€¼
+inputs£º ÒªÑµÁ·µÄ¶à¸öÍ¼Æ¬¶ÔÓ¦unsigned char¶şÎ¬Êı×éµÄÊı×é,Ö¸ÏòµÄ¶şÎ¬Êı×éµÄbatchSize±¶´óĞ¡ÄÚ´æ¿Õ¼äÖ¸Õë¡£ÔÚMNIST²âÊÔDEMOÖĞ¶şÎ¬Êı×éÎª28x28£¬Ã¿¸ö¶şÎ¬Êı×éÊıÖµ·Ö±ğÎª¶ÔÓ¦Î»ÖÃÍ¼ÏñÏñËØ»Ò¶ÈÖµ
 
-resMatï¼šç»“æœå‘é‡çŸ©é˜µ
+resMat£º½á¹ûÏòÁ¿¾ØÕó
 
-labelsï¼šè¦è®­ç»ƒçš„å¤šä¸ªå›¾ç‰‡åˆ†åˆ«å¯¹åº”çš„æ ‡ç­¾æ•°ç»„ã€‚å¤§å°ä¸ºbatchSize
+labels£ºÒªÑµÁ·µÄ¶à¸öÍ¼Æ¬·Ö±ğ¶ÔÓ¦µÄ±êÇ©Êı×é¡£´óĞ¡ÎªbatchSize
 
-batchSize:æ‰¹é‡è®­ç»ƒè¾“å…¥å›¾åƒï¼ˆäºŒç»´æ•°ç»„ï¼‰çš„æ•°é‡
+batchSize:ÅúÁ¿ÑµÁ·ÊäÈëÍ¼Ïñ£¨¶şÎ¬Êı×é£©µÄÊıÁ¿
 
 void train_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uint8_t *labels, const int batchSize);
 
-####æ‰¹é‡é¢„æµ‹
-lenet:  LeNet5çš„æƒå€¼çš„æŒ‡é’ˆï¼ŒLeNet5ç¥ç»ç½‘ç»œçš„æ ¸å¿ƒ
+####ÅúÁ¿Ô¤²â
+lenet:  LeNet5µÄÈ¨ÖµµÄÖ¸Õë£¬LeNet5Éñ¾­ÍøÂçµÄºËĞÄ
 
-inputsï¼š è¦é¢„æµ‹çš„å¤šä¸ªå›¾ç‰‡å¯¹åº”unsigned charäºŒç»´æ•°ç»„çš„æ•°ç»„,æŒ‡å‘çš„äºŒç»´æ•°ç»„çš„batchSizeå€å¤§å°å†…å­˜ç©ºé—´æŒ‡é’ˆã€‚åœ¨MNISTæµ‹è¯•DEMOä¸­äºŒç»´æ•°ç»„ä¸º28x28ï¼Œæ¯ä¸ªäºŒç»´æ•°ç»„æ•°å€¼åˆ†åˆ«ä¸ºå¯¹åº”ä½ç½®å›¾åƒåƒç´ ç°åº¦å€¼
+inputs£º ÒªÔ¤²âµÄ¶à¸öÍ¼Æ¬¶ÔÓ¦unsigned char¶şÎ¬Êı×éµÄÊı×é,Ö¸ÏòµÄ¶şÎ¬Êı×éµÄbatchSize±¶´óĞ¡ÄÚ´æ¿Õ¼äÖ¸Õë¡£ÔÚMNIST²âÊÔDEMOÖĞ¶şÎ¬Êı×éÎª28x28£¬Ã¿¸ö¶şÎ¬Êı×éÊıÖµ·Ö±ğÎª¶ÔÓ¦Î»ÖÃÍ¼ÏñÏñËØ»Ò¶ÈÖµ
 
-resMatï¼šç»“æœå‘é‡çŸ©é˜µ
+resMat£º½á¹ûÏòÁ¿¾ØÕó
 
-labelCount: ç»“æœå‘é‡ä¸ªæ•°
+labelCount: ½á¹ûÏòÁ¿¸öÊı
 
-batchSize: æ‰¹é‡é¢„æµ‹è¾“å…¥å›¾åƒï¼ˆäºŒç»´æ•°ç»„ï¼‰çš„æ•°é‡
+batchSize: ÅúÁ¿Ô¤²âÊäÈëÍ¼Ïñ£¨¶şÎ¬Êı×é£©µÄÊıÁ¿
 
-results: é¢„æµ‹ç»“æœä¿å­˜çš„åœ°å€
+results: Ô¤²â½á¹û±£´æµÄµØÖ·
 
 void predict_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT], uint8_t labelCount, const int batchSize, uint8_t *results);
 
-#####é¢„æµ‹
-lenet:  LeNet5çš„æƒå€¼çš„æŒ‡é’ˆï¼ŒLeNet5ç¥ç»ç½‘ç»œçš„æ ¸å¿ƒ
+#####Ô¤²â
+lenet:  LeNet5µÄÈ¨ÖµµÄÖ¸Õë£¬LeNet5Éñ¾­ÍøÂçµÄºËĞÄ
 
-input:  è¾“å…¥çš„å›¾åƒçš„æ•°æ®
+input:  ÊäÈëµÄÍ¼ÏñµÄÊı¾İ
 
-labels: ç»“æœå‘é‡çŸ©é˜µæŒ‡é’ˆ
+labels: ½á¹ûÏòÁ¿¾ØÕóÖ¸Õë
 
-labelCount:	ç»“æœå‘é‡ä¸ªæ•°
+labelCount:	½á¹ûÏòÁ¿¸öÊı
 
-return  è¿”å›å€¼ä¸ºé¢„æµ‹çš„ç»“æœ
+return  ·µ»ØÖµÎªÔ¤²âµÄ½á¹û
 
 int predict(LeNet5 *lenet, image input, const char(*labels)[LAYER6], int labelCount);
 
-#####åˆå§‹åŒ–
-lenet:  LeNet5çš„æƒå€¼çš„æŒ‡é’ˆï¼ŒLeNet5ç¥ç»ç½‘ç»œçš„æ ¸å¿ƒ
+#####³õÊ¼»¯
+lenet:  LeNet5µÄÈ¨ÖµµÄÖ¸Õë£¬LeNet5Éñ¾­ÍøÂçµÄºËĞÄ
 
 void initial(LeNet5 *lenet);
