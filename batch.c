@@ -172,7 +172,7 @@ static void backward(LeNet5 *lenet, LeNet5 *delta, FeaturePack *errorPack, Featu
 
 static void load_input(pack_t(*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0], image_t input[],uint8_t count)
 {
-    count = count % 5;
+    count %= SZPACK + 1;
     const long sz = sizeof(*input) / sizeof(***input);
     FOREACH(i, count)
     {
