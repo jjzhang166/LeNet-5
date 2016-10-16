@@ -207,11 +207,10 @@ static void load_target(pack_t *output, pack_t *error, uint8_t *labels,const cha
 
 void train_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uint8_t *labels, const int batchSize)
 {
-    double dlenet[ALIGN(sizeof(LeNet5),sizeof(pack_t))] = { 0 };
 	uint8_t szload = SZPACK;
-    int i = 0;
+    const double k = ALPHA / batchSize;
 #pragma omp parallel for
-    for (i = 0; i < (batchSize + SZPACK - 1) / SZPACK; i++)
+    for (int i = 0; i < (batchSize + SZPACK - 1) / SZPACK; i++)
     {
 		szload -= (i == batchSize / SZPACK) * (SZPACK - batchSize % SZPACK);
         char buffer[sizeof(FeaturePack) * 2 + ALIGN(sizeof(LeNet5), sizeof(pack_t)) + sizeof(pack_t) - 1] = { 0 };
@@ -225,12 +224,9 @@ void train_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uin
         #pragma omp critical
         {
             FOREACH(j, sizeof(LeNet5)/sizeof(double))
-                dlenet[j] += ((double *)delta)[j];
+                ((double *)lenet)[j] += k * ((double *)delta)[j];
         }
     }
-    const double k = ALPHA / batchSize;
-    FOREACH(i, sizeof(LeNet5)/sizeof(double))
-    ((double *)lenet)[i] += k * dlenet[i];
 }
 
 void predict_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uint8_t labelCount, const int batchSize, uint8_t *results)
