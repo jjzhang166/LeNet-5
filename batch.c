@@ -208,6 +208,7 @@ static void load_target(pack_t *output, pack_t *error, uint8_t *labels,const cha
 void train_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uint8_t *labels, const int batchSize)
 {
 	uint8_t szload = SZPACK;
+    double deltasum[sizeof(LeNet5) / sizeof(double)] = {0};
     const double k = ALPHA / batchSize;
 #pragma omp parallel for
     for (int i = 0; i < (batchSize + SZPACK - 1) / SZPACK; i++)
@@ -224,9 +225,11 @@ void train_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uin
         #pragma omp critical
         {
             FOREACH(j, sizeof(LeNet5)/sizeof(double))
-                ((double *)lenet)[j] += k * ((double *)delta)[j];
+                deltasum[j] += ((double *)delta)[j];
         }
     }
+    FOREACH(j, sizeof(LeNet5)/sizeof(double))
+        ((double *)lenet)[j] += k * deltasum[j];
 }
 
 void predict_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uint8_t labelCount, const int batchSize, uint8_t *results)
