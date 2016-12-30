@@ -35,9 +35,9 @@ void initial(LeNet5 *lenet);
 #define LAYER3			16
 #define LAYER4			16
 #define LAYER5			120
-#define OUTPUT          84
+#define OUTPUT          10
 
-#define ALPHA 0.05
+#define ALPHA 0.5
 
 typedef unsigned char uint8_t;
 typedef uint8_t image_t[LENGTH_FEATURE0][LENGTH_FEATURE0];
@@ -56,9 +56,9 @@ typedef struct LeNet5
 
 }LeNet5;
 
-void train_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT],uint8_t *labels, const int batchSize);
+void train_batch(LeNet5 *lenet, image_t *inputs, uint8_t *labels, const int batchSize);
 
-void predict_batch(LeNet5 *lenet, image_t *inputs, const char(*resMat)[OUTPUT], uint8_t labelCount, const int batchSize, uint8_t *results);
+void predict_batch(LeNet5 *lenet, image_t *inputs, uint8_t labelCount, const int batchSize, uint8_t *results);
 
 uint8_t predict(LeNet5 *lenet, image_t input, const char(*resMat)[OUTPUT], uint8_t labelCount);
 
