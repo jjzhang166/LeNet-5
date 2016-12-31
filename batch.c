@@ -218,7 +218,7 @@ static inline void softmax(pack_t input[OUTPUT],pack_t loss[OUTPUT],uint8_t labe
 		inner += loss[labels[k]][k];
 		for (int i = 0; i < count; ++i)
 		{
-			loss[i][k] = ((i == labels[k]) - loss[i][k] - inner)*loss[i][k];
+			loss[i][k] *= (i == labels[k]) - loss[i][k] - inner;
 		}
 	}
 }
