@@ -177,11 +177,11 @@ static double relugrad(double y)
 	return y > 0;
 }
 
-static inline void load_input(pack_t(*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0], image_t input[],uint8_t count)
+static inline void load_input(pack_t(*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0], image_t input[],uint8_t szpack)
 {
-    count %= SZPACK + 1;
+    szpack %= SZPACK + 1;
     const long sz = sizeof(*input) / sizeof(***input);
-    FOREACH(i, count)
+    FOREACH(i, szpack)
     {
         double mean = 0,std = 0;
         FOREACH(j, GETLENGTH(*input))
@@ -195,7 +195,7 @@ static inline void load_input(pack_t(*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0],
         FOREACH(j, GETLENGTH(*input))
         FOREACH(k, GETLENGTH(**input))
         {
-            layer0[0][j][k][i] = (input[i][j][k] - mean) / std;
+            layer0[0][j + PADDING][k + PADDING][i] = (input[i][j][k] - mean) / std;
         }
     }
 }

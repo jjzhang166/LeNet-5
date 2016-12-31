@@ -74,20 +74,6 @@ static double relu(double x)
 	return x*(x > 0);
 }
 
-static void normalize(uint8_t input[],double output[],int count)
-{
-	double mean = 0, std = 0;
-	FOREACH(i, count)
-	{
-		mean += input[i];
-		std += input[i] * input[i];
-	}
-	mean /= count;
-	std = sqrt(std / count - mean*mean);
-	FOREACH(i, count)
-		output[i] = (input[i] - mean) / std;
-}
-
 static void forward(LeNet5 *lenet, Feature *features, double(*action)(double))
 {
 	CONVOLUTION_FORWARD(features->input, features->layer1, lenet->weight0_1, lenet->bias0_1, action);
@@ -98,9 +84,25 @@ static void forward(LeNet5 *lenet, Feature *features, double(*action)(double))
 	DOT_PRODUCT_FORWARD(features->layer5, features->output, lenet->weight5_6, lenet->bias5_6, action);
 }
 
-static void load_input(Feature *features, image_t input)
+
+static inline void load_input(Feature *features, image_t input)
 {
-	normalize((uint8_t *)input, (double *)features->input, sizeof(image_t) / sizeof(uint8_t));
+	double (*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0] = features->input;
+	const long sz = sizeof(input) / sizeof(**input);
+	double mean = 0,std = 0;
+	FOREACH(j, GETLENGTH(input))
+		FOREACH(k, GETLENGTH(*input))
+		{
+			mean += input[j][k];
+			std += input[j][k] * input[j][k];
+		}
+	mean /= sz;
+	std = sqrt(std / sz - mean*mean);
+	FOREACH(j, GETLENGTH(input))
+		FOREACH(k, GETLENGTH(*input))
+		{
+			layer0[0][j + PADDING][k + PADDING] = (input[j][k] - mean) / std;
+		}
 }
 
 static uint8_t get_result(Feature *features, uint8_t count)
