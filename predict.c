@@ -71,6 +71,11 @@ typedef struct Feature
 		((double *)output)[j] = action(((double *)output)[j] + bias[j]);                                    \
 }
 
+static double relu(double x)
+{
+	return x*(x > 0);
+}
+
 static void normalize(uint8_t input[],double output[],int count)
 {
 	double mean = 0, std = 0;
@@ -100,34 +105,28 @@ static void load_input(Feature *features, image_t input)
 	normalize((uint8_t *)input, (double *)features->input, sizeof(image_t) / sizeof(uint8_t));
 }
 
-static uint8_t get_result(Feature *features, const char(*labels)[OUTPUT], uint8_t count)
+static uint8_t get_result(Feature *features, uint8_t count)
 {
 	double *output = (double *)features->output;
-	const int outlen = GETCOUNT(features->output);
 	uint8_t result = 0;
-	double minvalue = 0;
-    FOREACH(j, outlen)
-    minvalue += (output[j] - labels[0][j])*(output[j] - labels[0][j]);
+	double maxvalue = *output;
 	for (uint8_t i = 1; i < count; ++i)
 	{
-		double sum = 0;
-		FOREACH(j, outlen)
-			sum += (output[j] - labels[i][j])*(output[j] - labels[i][j]);
-		if (sum < minvalue)
+		if (output[i] > maxvalue)
 		{
-			minvalue = sum;
+			maxvalue = output[i];
 			result = i;
 		}
 	}
 	return result;
 }
 
-uint8_t predict(LeNet5 *lenet, image_t input, const char (*resMat)[OUTPUT],uint8_t labelCount)
+uint8_t predict(LeNet5 *lenet, image_t input,uint8_t labelCount)
 {
 	Feature features = { 0 };
 	load_input(&features, input);
-	forward(lenet, &features, tanh);
-	return get_result(&features, resMat, labelCount);
+	forward(lenet, &features, relu);
+	return get_result(&features, labelCount);
 }
 
 void initial(LeNet5 *lenet)
@@ -153,10 +152,10 @@ static void vector_x_matrix(double *src,double *mat,double *des,const long heigh
 		asm("vmaskmovpd (%0), %%ymm3, %%ymm0;"::"r"(des + w) : "%ymm0", "%ymm3");
         for(long h=0;h<height;h++)
         {
-            asm("                                           \
-                vbroadcastsd %0, %%ymm1;                    \
+            asm("                                      \
+                vbroadcastsd %0, %%ymm1;               \
                 vmaskmovpd (%1), %%ymm3, %%ymm2;       \
-                vfmadd231pd %%ymm1, %%ymm2, %%ymm0;         \
+                vfmadd231pd %%ymm1, %%ymm2, %%ymm0;    \
                 "::"m"(src[h]),"r"(mat + h * width + w)
                 :"%ymm0","%ymm1","%ymm2","%ymm3");
         }
@@ -178,10 +177,10 @@ static void convolute_valid(double *src,double *conv,double *des,const long dh,c
             {
                 for(long c1=0;c1<cw;++c1)
                 {
-					asm("                                       \
-                        vbroadcastsd %0, %%ymm1;                \
-                        vmaskmovpd (%1), %%ymm3, %%ymm2;   \
-                        vfmadd231pd %%ymm2, %%ymm1, %%ymm0;     \
+					asm("                                   \
+                        vbroadcastsd %0, %%ymm1;            \
+                        vmaskmovpd (%1), %%ymm3, %%ymm2;   	\
+                        vfmadd231pd %%ymm2, %%ymm1, %%ymm0; \
                         "::"m"(conv[c0 * cw + c1]), "r"(src + (c0 + d0) * sw + c1 + d1)
                         :"%ymm0","%ymm1","%ymm2","%ymm3");
                 }
