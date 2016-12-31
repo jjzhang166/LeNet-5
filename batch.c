@@ -177,7 +177,7 @@ static double relugrad(double y)
 	return y > 0;
 }
 
-static void load_input(pack_t(*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0], image_t input[],uint8_t count)
+static inline void load_input(pack_t(*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0], image_t input[],uint8_t count)
 {
     count %= SZPACK + 1;
     const long sz = sizeof(*input) / sizeof(***input);
@@ -200,48 +200,27 @@ static void load_input(pack_t(*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0], image_
     }
 }
 
-static void softmax(pack_t top[], pack_t bottom[], int count, int szpack)
+static inline void softmax(pack_t input[OUTPUT],pack_t loss[OUTPUT],uint8_t labels[SZPACK],int count,int szpack)
 {
 	for (int k = 0; k < szpack; ++k)
 	{
+		double inner = 0;
 		for (int i = 0; i < count; ++i)
 		{
 			double res = 0;
 			for (int j = 0; j < count; ++j)
 			{
-				res += exp(top[j][k] - top[i][k]);
+				res += exp(input[j][k] - input[i][k]);
 			}
-			bottom[i][k] = 1. / res;
+			loss[i][k] = 1. / res;
+			inner -= loss[i][k] * loss[i][k];
+		}
+		inner += loss[labels[k]][k];
+		for (int i = 0; i < count; ++i)
+		{
+			loss[i][k] = ((i == labels[k]) - loss[i][k] - inner)*loss[i][k];
 		}
 	}
-}
-
-static void softmaxloss(pack_t output[], pack_t loss[], uint8_t labels[SZPACK], int count,int szpack)
-{
-	for (int k = 0; k < szpack; ++k)
-	{
-		for (int i = 0; i < count; ++i)
-		{
-			loss[i][k] = (i == labels[k]) - output[i][k];
-		}
-		double inner = 0;
-		for (int i = 0; i < count; ++i)
-		{
-			inner += loss[i][k] * output[i][k];
-		}
-		for (int i = 0; i < count; ++i)
-		{
-			loss[i][k] = (loss[i][k] - inner)*output[i][k];
-		}
-	}
-}
-
-
-static void load_target(pack_t *output, pack_t *error, uint8_t labels[SZPACK],uint8_t count)
-{
-	pack_t buffer[OUTPUT] = { 0 };
-	softmax(output, buffer, OUTPUT, count);
-	softmaxloss(buffer, error, labels, OUTPUT, count);
 }
 
 void train_batch(LeNet5 *lenet, image_t *inputs, uint8_t *labels, const int batchSize)
@@ -259,7 +238,7 @@ void train_batch(LeNet5 *lenet, image_t *inputs, uint8_t *labels, const int batc
         LeNet5 *delta = (LeNet5 *)(errorPack + 1);
         load_input(featurePack->layer0, inputs + i * SZPACK, szload);
         forward(lenet, featurePack, relu);
-        load_target(featurePack->output, errorPack->output, labels + i * SZPACK, szload);
+        softmax(featurePack->output, errorPack->output, labels + i * SZPACK, OUTPUT, szload);
         backward(lenet, delta, errorPack, featurePack, relugrad);
         #pragma omp critical
         {
