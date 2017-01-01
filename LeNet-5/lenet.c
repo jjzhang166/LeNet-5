@@ -2,6 +2,7 @@
 #include <memory.h>
 #include <time.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define GETLENGTH(array) (sizeof(array)/sizeof(*(array)))
 
@@ -126,20 +127,6 @@ double relugrad(double y)
 	return y > 0;
 }
 
-static void normalize(uint8 input[],double output[],int count)
-{
-	double mean = 0, std = 0;
-	FOREACH(i, count)
-	{
-		mean += input[i];
-		std += input[i] * input[i];
-	}
-	mean /= count;
-	std = sqrt(std / count - mean*mean);
-	FOREACH(i, count)
-		output[i] = (input[i] - mean) / std;
-}
-
 static void forward(LeNet5 *lenet, Feature *features, double(*action)(double))
 {
 	CONVOLUTION_FORWARD(features->input, features->layer1, lenet->weight0_1, lenet->bias0_1, action);
@@ -160,38 +147,43 @@ static void backward(LeNet5 *lenet, LeNet5 *deltas, Feature *errors, Feature *fe
 	CONVOLUTION_BACKWARD(features->input, errors->input, errors->layer1, lenet->weight0_1, deltas->weight0_1, deltas->bias0_1, actiongrad);
 }
 
-static void load_input(Feature *features, image input)
+static inline void load_input(Feature *features, image input)
 {
-	normalize((uint8 *)input, (double *)features->input, sizeof(image) / sizeof(uint8));
+	double (*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0] = features->input;
+	const long sz = sizeof(image) / sizeof(**input);
+	double mean = 0, std = 0;
+	FOREACH(j, sizeof(image) / sizeof(*input))
+		FOREACH(k, sizeof(*input) / sizeof(**input))
+	{
+		mean += input[j][k];
+		std += input[j][k] * input[j][k];
+	}
+	mean /= sz;
+	std = sqrt(std / sz - mean*mean);
+	FOREACH(j, sizeof(image) / sizeof(*input))
+		FOREACH(k, sizeof(*input) / sizeof(**input))
+	{
+		layer0[0][j + PADDING][k + PADDING] = (input[j][k] - mean) / std;
+	}
 }
 
-void softmax(double top[], double bottom[], int count)
+static inline void softmax(double input[OUTPUT], double loss[OUTPUT], int label, int count)
 {
+	double inner = 0;
 	for (int i = 0; i < count; ++i)
 	{
 		double res = 0;
 		for (int j = 0; j < count; ++j)
 		{
-			res += exp(top[j] - top[i]);
+			res += exp(input[j] - input[i]);
 		}
-		bottom[i] = 1. / res;
+		loss[i] = 1. / res;
+		inner -= loss[i] * loss[i];
 	}
-}
-
-void softmaxloss(double output[], double loss[], int label, int count)
-{
+	inner += loss[label];
 	for (int i = 0; i < count; ++i)
 	{
-		loss[i] = (i == label) - output[i];
-	}
-	double inner = 0;
-	for (int i = 0; i < count; ++i)
-	{
-		inner += loss[i] * output[i];
-	}
-	for (int i = 0; i < count; ++i)
-	{
-		loss[i] = (loss[i] - inner)*output[i];
+		loss[i] *= (i == label) - loss[i] - inner;
 	}
 }
 
@@ -199,10 +191,7 @@ static void load_target(Feature *features, Feature *errors, int label)
 {
 	double *output = (double *)features->output;
 	double *error = (double *)errors->output;
-	double buffer[OUTPUT] = { 0 };
-	const int outlen = GETCOUNT(features->output);
-	softmax(output, buffer, outlen);
-	softmaxloss(buffer, error, label, outlen);
+	softmax(output, error, label, GETCOUNT(features->output));
 }
 
 static uint8 get_result(Feature *features, uint8 count)
@@ -210,8 +199,8 @@ static uint8 get_result(Feature *features, uint8 count)
 	double *output = (double *)features->output; 
 	const int outlen = GETCOUNT(features->output);
 	uint8 result = 0;
-	double maxvalue = 0;
-	for (uint8 i = 0; i < count; ++i)
+	double maxvalue = *output;
+	for (uint8 i = 1; i < count; ++i)
 	{
 		if (output[i] > maxvalue)
 		{
@@ -288,9 +277,9 @@ uint8 Predict(LeNet5 *lenet, image input,uint8 count)
 void Initial(LeNet5 *lenet)
 {
 	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->bias0_1; *pos++ = f64rand());
-	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->weight2_3; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (INPUT + LAYER1))));
-	for (double *pos = (double *)lenet->weight2_3; pos < (double *)lenet->weight4_5; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL0 * LENGTH_KERNEL0 * (LAYER2 + LAYER3))));
-	for (double *pos = (double *)lenet->weight4_5; pos < (double *)lenet->weight5_6; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL1 * LENGTH_KERNEL1 * (LAYER4 + LAYER5))));
+	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->weight2_3; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL * LENGTH_KERNEL * (INPUT + LAYER1))));
+	for (double *pos = (double *)lenet->weight2_3; pos < (double *)lenet->weight4_5; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL * LENGTH_KERNEL * (LAYER2 + LAYER3))));
+	for (double *pos = (double *)lenet->weight4_5; pos < (double *)lenet->weight5_6; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL * LENGTH_KERNEL * (LAYER4 + LAYER5))));
 	for (double *pos = (double *)lenet->weight5_6; pos < (double *)lenet->bias0_1; *pos++ *= sqrt(6.0 / (LAYER5 + OUTPUT)));
 	for (int *pos = (int *)lenet->bias0_1; pos < (int *)(lenet + 1); *pos++ = 0);
 }
