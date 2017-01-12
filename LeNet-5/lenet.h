@@ -5,13 +5,13 @@
 @api	:
 
 批量训练
-void TrainBatch(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT],uint8 *labels, int batchSize);
+void TrainBatch(LeNet5 *lenet, image *inputs, uint8 *labels, int batchSize);
 
 训练
-void Train(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT],uint8 label);
+void Train(LeNet5 *lenet, image input, uint8 label);
 
 预测
-uint8 Predict(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT], uint8 count);
+uint8 Predict(LeNet5 *lenet, image input, uint8 count);
 
 初始化
 void Initial(LeNet5 *lenet);

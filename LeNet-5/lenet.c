@@ -167,66 +167,35 @@ static inline void load_input(Feature *features, image input)
 	}
 }
 
-static inline void softmax(double input[OUTPUT], double loss[OUTPUT], int label, int count)
+static uint8 get_result(double *output, uint8 count)
 {
-	double inner = 0;
-	for (int i = 0; i < count; ++i)
+	uint8 result = 0;
+	for (uint8 i = 1; i < count; ++i)
+		result += (i - result) * (output[i] > output[result]);
+	return result;
+}
+
+static inline void softmax(double input[OUTPUT], double loss[OUTPUT], uint8 label, int count)
+{
+	double max = input[get_result(input, count)];
+	double k = 0, inner = 0;
+	for (uint8 i = 0; i < count; ++i)
 	{
-		double res = 0;
-		for (int j = 0; j < count; ++j)
-		{
-			res += exp(input[j] - input[i]);
-		}
-		loss[i] = 1. / res;
+		loss[i] = exp(input[i] - max);
+		k += loss[i];
+	}
+	k = 1. / k;
+	for (uint8 i = 0; i < count; ++i)
+	{
+		loss[i] *= k;
 		inner -= loss[i] * loss[i];
 	}
 	inner += loss[label];
-	for (int i = 0; i < count; ++i)
+	for (uint8 i = 0; i < count; ++i)
 	{
 		loss[i] *= (i == label) - loss[i] - inner;
 	}
 }
-
-static void load_target(Feature *features, Feature *errors, int label)
-{
-	double *output = (double *)features->output;
-	double *error = (double *)errors->output;
-	softmax(output, error, label, GETCOUNT(features->output));
-}
-
-static uint8 get_result(Feature *features, uint8 count)
-{
-	double *output = (double *)features->output; 
-	const int outlen = GETCOUNT(features->output);
-	uint8 result = 0;
-	double maxvalue = *output;
-	for (uint8 i = 1; i < count; ++i)
-	{
-		if (output[i] > maxvalue)
-		{
-			maxvalue = output[i];
-			result = i;
-		}
-	}
-	return result;
-}
-
-static double f64rand()
-{
-	static int randbit = 0;
-	if (!randbit)
-	{
-		srand((unsigned)time(0));
-		for (int i = RAND_MAX; i; i >>= 1, ++randbit);
-	}
-	unsigned long long lvalue = 0x4000000000000000L;
-	int i = 52 - randbit;
-	for (; i > 0; i -= randbit)
-		lvalue |= (unsigned long long)rand() << i;
-	lvalue |= (unsigned long long)rand() >> -i;
-	return *(double *)&lvalue - 3;
-}
-
 
 void TrainBatch(LeNet5 *lenet, image *inputs, uint8 *labels, int batchSize)
 {
@@ -240,7 +209,7 @@ void TrainBatch(LeNet5 *lenet, image *inputs, uint8 *labels, int batchSize)
 		LeNet5	deltas = { 0 };
 		load_input(&features, inputs[i]);
 		forward(lenet, &features, relu);
-		load_target(&features, &errors, labels[i]);
+		softmax(features.output, errors.output, labels[i], GETCOUNT(features.output));
 		backward(lenet, &deltas, &errors, &features, relugrad);
 		#pragma omp critical
 		{
@@ -260,7 +229,7 @@ void Train(LeNet5 *lenet, image input, uint8 label)
 	LeNet5 deltas = { 0 };
 	load_input(&features, input);
 	forward(lenet, &features, relu);
-	load_target(&features, &errors, label);
+	softmax(features.output, errors.output, label, GETCOUNT(features.output));
 	backward(lenet, &deltas, &errors, &features, relugrad);
 	FOREACH(i, GETCOUNT(LeNet5))
 		((double *)lenet)[i] += ALPHA * ((double *)&deltas)[i];
@@ -271,12 +240,13 @@ uint8 Predict(LeNet5 *lenet, image input,uint8 count)
 	Feature features = { 0 };
 	load_input(&features, input);
 	forward(lenet, &features, relu);
-	return get_result(&features, count);
+	return get_result(features.output, count);
 }
 
 void Initial(LeNet5 *lenet)
 {
-	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->bias0_1; *pos++ = f64rand());
+	srand((unsigned)time(0));
+	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->bias0_1; *pos++ = rand()*(2. / RAND_MAX) - 1);
 	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->weight2_3; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL * LENGTH_KERNEL * (INPUT + LAYER1))));
 	for (double *pos = (double *)lenet->weight2_3; pos < (double *)lenet->weight4_5; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL * LENGTH_KERNEL * (LAYER2 + LAYER3))));
 	for (double *pos = (double *)lenet->weight4_5; pos < (double *)lenet->weight5_6; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL * LENGTH_KERNEL * (LAYER4 + LAYER5))));

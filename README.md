@@ -17,37 +17,30 @@ lenet:  LeNet5的权值的指针，LeNet5神经网络的核心
 
 inputs： 要训练的多个图片对应unsigned char二维数组的数组,指向的二维数组的batchSize倍大小内存空间指针。在MNIST测试DEMO中二维数组为28x28，每个二维数组数值分别为对应位置图像像素灰度值
 
-resMat：结果向量矩阵
-
 labels：要训练的多个图片分别对应的标签数组。大小为batchSize
 
 batchSize:批量训练输入图像（二维数组）的数量
 
-void TrainBatch(LeNet5 *lenet, image *inputs, const char(*resMat)[OUTPUT],uint8 *labels, int batchSize);
+void TrainBatch(LeNet5 *lenet, image *inputs, uint8 *labels, int batchSize);
 
 #####单个训练
 lenet:  LeNet5的权值的指针，LeNet5神经网络的核心
 
 input： 要训练的图片对应二维数组
 
-resMat：结果向量矩阵
-
 label: 要训练的图片对应的标签
-
-void Train(LeNet5 *lenet, image input, const char(*resMat)[OUTPUT],uint8 label);
+void Train(LeNet5 *lenet, image input, uint8 label);
 
 #####预测
 lenet:  LeNet5的权值的指针，LeNet5神经网络的核心
 
 input:  输入的图像的数据
 
-labels: 结果向量矩阵指针
-
 count:	结果向量个数
 
 return  返回值为预测的结果
 
-int Predict(LeNet5 *lenet, image input, const char(*labels)[LAYER6], int count);
+uint8 Predict(LeNet5 *lenet, image input, uint8 count);
 
 #####初始化
 lenet:  LeNet5的权值的指针，LeNet5神经网络的核心
