@@ -29,7 +29,7 @@ static void vector_x_matrix(pack_t *src,double *mat,pack_t *des,const long heigh
 static void matrix_x_vector(double *mat,pack_t *src,pack_t *des,const long height,const long width);
 static void subsamp_max_forward(pack_t *src,pack_t *des,const long sh,const long sw,const long dh,const long dw);
 static void subsamp_max_backward(pack_t *srcl,pack_t *desl,pack_t *src,pack_t *des,const long sh,const long sw,const long dh,const long dw);
-static void get_result(pack_t output[OUTPUT], const uint8_t labelCount, uint8_t labels[SZPACK], uint8_t szpack);
+static void get_result(pack_t output[OUTPUT], const uint8_t count, uint8_t labels[SZPACK]);
 
 
 //f(n,align) = min{x|x >= n && x % align == 0}
@@ -177,11 +177,10 @@ static double relugrad(double y)
 	return y > 0;
 }
 
-static inline void load_input(pack_t(*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0], image_t input[],uint8_t szpack)
+static void load_input(pack_t(*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0], image_t input[])
 {
-    szpack %= SZPACK + 1;
     const long sz = sizeof(*input) / sizeof(***input);
-    FOREACH(i, szpack)
+    FOREACH(i, SZPACK)
     {
         double mean = 0,std = 0;
         FOREACH(j, GETLENGTH(*input))
@@ -200,45 +199,59 @@ static inline void load_input(pack_t(*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0],
     }
 }
 
-static inline void softmax(pack_t input[OUTPUT],pack_t loss[OUTPUT],uint8_t labels[SZPACK],int count,int szpack)
+static inline void softmax(pack_t input[OUTPUT],pack_t loss[OUTPUT],uint8_t labels[SZPACK],int count)
 {
-	for (int k = 0; k < szpack; ++k)
+//	double k[SZPACK] = {0},inner[SZPACK] = {0};
+//	unsigned long long result[4] = { 0 };
+//	asm("vxorpd %ymm0, %ymm0, %ymm0;");
+//	for (int j = 0; j < count; ++j)
+//		asm("vmaxpd (%0), %%ymm0, %%ymm0;"::"r"(input[j]): "%ymm0");
+//	for (int j = 0; j < count; ++j)
+//		asm("							\
+//			vsubpd (%0), %%ymm0, %%ymm1;\
+//			vmovapd %%ymm1, (%1);		\
+//			"::"r"(input[j]),"r"(loss[j])
+//			:"%ymm0","%ymm1");
+//	for (int j = 0; j < count * SZPACK; ++j)
+//	{
+//		((double *) loss)[j] = exp(((double *) loss)[j]);
+//		k[j % count] += ((double *) loss)[j];
+//	}
+	for (int j = 0; j < SZPACK; ++j)
 	{
-		double inner = 0;
+		double inner = 0, max = 0, k = 0;
+		asm("vxorpd %%xmm0, %%xmm0, %%xmm0":::"%xmm0");
+		for (int i = 0; i < count; ++i)
+			asm("vmaxsd %0, %%xmm0, %%xmm0;"::"m"(input[i][j]):"%xmm0");
+		asm("vmovsd %%xmm0, %0;":"=m"(max)::"%xmm0");
+		for (int i = 0; i < count; ++i)
+			k += (loss[i][j] = exp(input[i][j] - max));
+		k = 1. / k;
 		for (int i = 0; i < count; ++i)
 		{
-			double res = 0;
-			for (int j = 0; j < count; ++j)
-			{
-				res += exp(input[j][k] - input[i][k]);
-			}
-			loss[i][k] = 1. / res;
-			inner -= loss[i][k] * loss[i][k];
+			loss[i][j] *= k;
+			inner += loss[i][j] * loss[i][j];
 		}
-		inner += loss[labels[k]][k];
+		inner -= loss[labels[j]][j];
 		for (int i = 0; i < count; ++i)
-		{
-			loss[i][k] *= (i == labels[k]) - loss[i][k] - inner;
-		}
+			loss[i][j] *= (i == labels[j]) + inner - loss[i][j];
 	}
 }
 
 void train_batch(LeNet5 *lenet, image_t *inputs, uint8_t *labels, const int batchSize)
 {
-	uint8_t szload = SZPACK;
     double deltasum[sizeof(LeNet5) / sizeof(double)] = {0};
     const double k = ALPHA / batchSize;
 #pragma omp parallel for
-    for (int i = 0; i < (batchSize + SZPACK - 1) / SZPACK; i++)
+    for (int i = 0; i < batchSize / SZPACK; i++)
     {
-		szload -= (i == batchSize / SZPACK) * (SZPACK - batchSize % SZPACK);
         char buffer[sizeof(FeaturePack) * 2 + ALIGN(sizeof(LeNet5), sizeof(pack_t)) + sizeof(pack_t) - 1] = { 0 };
         FeaturePack *featurePack = (FeaturePack *)ALIGN((unsigned long long)buffer, sizeof(pack_t));
         FeaturePack *errorPack = featurePack + 1;
         LeNet5 *delta = (LeNet5 *)(errorPack + 1);
-        load_input(featurePack->layer0, inputs + i * SZPACK, szload);
+        load_input(featurePack->layer0, inputs + i * SZPACK);
         forward(lenet, featurePack, relu);
-        softmax(featurePack->output, errorPack->output, labels + i * SZPACK, OUTPUT, szload);
+        softmax(featurePack->output, errorPack->output, labels + i * SZPACK, OUTPUT);
         backward(lenet, delta, errorPack, featurePack, relugrad);
         #pragma omp critical
         {
@@ -252,25 +265,22 @@ void train_batch(LeNet5 *lenet, image_t *inputs, uint8_t *labels, const int batc
 
 void predict_batch(LeNet5 *lenet, image_t *inputs, uint8_t labelCount, const int batchSize, uint8_t *results)
 {
-	uint8_t szload = SZPACK;
 #pragma omp parallel for
-	for (int i = 0; i < (batchSize + SZPACK - 1) / SZPACK; i++)
+	for (int i = 0; i < batchSize / SZPACK; i++)
 	{
-		szload -= (i == batchSize / SZPACK) * (SZPACK - batchSize % SZPACK);
 		char buffer[sizeof(FeaturePack) + sizeof(pack_t) - 1] = { 0 };
 		FeaturePack *featurePack = (FeaturePack *)ALIGN((unsigned long long)buffer, sizeof(pack_t));
-		load_input(featurePack->layer0, inputs + i * SZPACK, szload);
+		load_input(featurePack->layer0, inputs + i * SZPACK);
 		forward(lenet, featurePack, relu);
-		get_result(featurePack->output, labelCount, results + i*SZPACK, szload);
+		get_result(featurePack->output, labelCount, results + i*SZPACK);
 	}
 }
 
-static void get_result(pack_t output[OUTPUT], const uint8_t labelCount, uint8_t labels[SZPACK], uint8_t szpack)
+static void get_result(pack_t output[OUTPUT], const uint8_t count, uint8_t labels[SZPACK])
 {
-	szpack %= SZPACK + 1;
 	unsigned long long result[4] = { 0 };
 	asm("vxorpd %ymm0, %ymm0, %ymm0;");
-	for (long long j = 0; j < labelCount; ++j)
+	for (long long j = 0; j < count; ++j)
 	{
 		asm("									\
 			vmovapd (%1), %%ymm1;				\
@@ -281,7 +291,7 @@ static void get_result(pack_t output[OUTPUT], const uint8_t labelCount, uint8_t 
             "::"m"(j), "r"(output[j]),"r"(result)
 			: "%ymm0", "%ymm1", "%ymm2", "memory");
 	}
-	for (long i = 0; i < szpack; ++i)
+	for (long i = 0; i < SZPACK; ++i)
 		labels[i] = (uint8_t)result[i];
 }
 
