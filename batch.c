@@ -199,24 +199,8 @@ static void load_input(pack_t(*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0], image_
     }
 }
 
-static inline void softmax(pack_t input[OUTPUT],pack_t loss[OUTPUT],uint8_t labels[SZPACK],int count)
+static void softmax(pack_t input[OUTPUT],pack_t loss[OUTPUT],uint8_t labels[SZPACK],int count)
 {
-//	double k[SZPACK] = {0},inner[SZPACK] = {0};
-//	unsigned long long result[4] = { 0 };
-//	asm("vxorpd %ymm0, %ymm0, %ymm0;");
-//	for (int j = 0; j < count; ++j)
-//		asm("vmaxpd (%0), %%ymm0, %%ymm0;"::"r"(input[j]): "%ymm0");
-//	for (int j = 0; j < count; ++j)
-//		asm("							\
-//			vsubpd (%0), %%ymm0, %%ymm1;\
-//			vmovapd %%ymm1, (%1);		\
-//			"::"r"(input[j]),"r"(loss[j])
-//			:"%ymm0","%ymm1");
-//	for (int j = 0; j < count * SZPACK; ++j)
-//	{
-//		((double *) loss)[j] = exp(((double *) loss)[j]);
-//		k[j % count] += ((double *) loss)[j];
-//	}
 	for (int j = 0; j < SZPACK; ++j)
 	{
 		double inner = 0, max = 0, k = 0;
