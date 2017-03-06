@@ -4,6 +4,91 @@
 #include <stdlib.h>
 #include <math.h>
 
+static void convolute_valid(double *src, double *conv, double *des, const long dh, const long dw, const long ch, const long cw)
+{
+	const long sw = dw + cw - 1;
+	for (long d0 = 0; d0 < dh; ++d0)
+		for (long d1 = 0; d1 < dw; ++d1)
+		{
+			for (long c0 = 0; c0 < ch; ++c0)
+				for (long c1 = 0; c1 < cw; ++c1)
+				{
+					des[d0 * dw + d1] += src[(d0 + c0)*sw + d1 + c1] * conv[c0*cw + c1];
+				}
+		}
+}
+
+static void convolute_full(double *src, double *conv, double *des, const long sh, const long sw, const long ch, const long cw)
+{
+	const long dw = sw + cw - 1;
+	for (long s0 = 0; s0 < sh; ++s0)
+		for (long s1 = 0; s1 < sw; ++s1)
+		{
+			for (long c0 = 0; c0 < ch; ++c0)
+				for (long c1 = 0; c1 < cw; ++c1)
+				{
+					des[(s0 + c0)*dw + s1 + c1] += src[s0*sw + s1] * conv[c0*cw + c1];
+				}
+		}
+}
+
+
+
+static void vector_x_matrix(double *src, double *mat, double *des, const long height, const long width)
+{
+	for (long y = 0; y < width; ++y)
+	{
+		for (long x = 0; x < height; ++x)
+		{
+			des[y] += src[x] * mat[x*width + y];
+		}
+	}
+}
+
+static void matrix_x_vector(double *mat, double *src, double *des, const long height, const long width)
+{
+	for (long x = 0; x < height; ++x)
+	{
+		for (long y = 0; y < width; ++y)
+		{
+			des[x] += src[y] * mat[x*width + y];
+		}
+	}
+}
+
+static void subsamp_max_forward(double *src, double *des, const long sh, const long sw, const long dh, const long dw)
+{
+	const long lh = sh / dh, lw = sw / dw;
+	for (long d0 = 0; d0 < dh; ++d0)
+		for (long d1 = 0; d1 < dw; ++d1)
+		{
+			long x = d0 * lh * sw + d1 * lw;
+			for (long l = 1; l < lh * lw; ++l)
+			{
+				long index = (d0 * lh + l / lw) * sw + d1 * lw + l % lw;
+				x += (src[index] > src[x]) * (index - x);
+			}
+			des[d0 * dw + d1] = src[x];
+		}
+}
+
+static void subsamp_max_backward(double *desl, double *src, double *des, const long sh, const long sw, const long dh, const long dw)
+{
+	const long lh = dh / sh, lw = dw / sw;
+	for (long s0 = 0; s0 < sh; ++s0)
+		for (long s1 = 0; s1 < sw; ++s1)
+		{
+			long x = s0 * lh * dw + s1 * lw;
+			for (long l = 1; l < lh * lw; ++l)
+			{
+				long index = (s0 * lh + l / lw) * dw + s1 * lw + l % lw;
+				x += (desl[index] > desl[x]) * (index - x);
+			}
+			des[x] = src[s0 * sw + s1];
+		}
+}
+
+
 #define GETLENGTH(array) (sizeof(array)/sizeof(*(array)))
 
 #define GETCOUNT(array)  (sizeof(array)/sizeof(double))
@@ -12,20 +97,12 @@
 
 #define CONVOLUTE_VALID(input,output,weight)											\
 {																						\
-	FOREACH(o0,GETLENGTH(output))														\
-		FOREACH(o1,GETLENGTH(*(output)))												\
-			FOREACH(w0,GETLENGTH(weight))												\
-				FOREACH(w1,GETLENGTH(*(weight)))										\
-					(output)[o0][o1] += (input)[o0 + w0][o1 + w1] * (weight)[w0][w1];	\
+	convolute_valid((double *)input,(double *)weight,(double *)output,GETLENGTH(output),GETLENGTH(*output),GETLENGTH(weight),GETLENGTH(*weight));\
 }
 
 #define CONVOLUTE_FULL(input,output,weight)												\
 {																						\
-	FOREACH(i0,GETLENGTH(input))														\
-		FOREACH(i1,GETLENGTH(*(input)))													\
-			FOREACH(w0,GETLENGTH(weight))												\
-				FOREACH(w1,GETLENGTH(*(weight)))										\
-					(output)[i0 + w0][i1 + w1] += (input)[i0][i1] * (weight)[w0][w1];	\
+	convolute_full((double *)input,(double *)weight,(double *)output,GETLENGTH(input),GETLENGTH(*input),GETLENGTH(weight),GETLENGTH(*weight)); \
 }
 
 #define CONVOLUTION_FORWARD(input,output,weight,bias,action)					\
@@ -54,60 +131,32 @@
 }
 
 
-#define SUBSAMP_MAX_FORWARD(input,output)														\
-{																								\
-	const int len0 = GETLENGTH(*(input)) / GETLENGTH(*(output));								\
-	const int len1 = GETLENGTH(**(input)) / GETLENGTH(**(output));								\
-	FOREACH(i, GETLENGTH(output))																\
-	FOREACH(o0, GETLENGTH(*(output)))															\
-	FOREACH(o1, GETLENGTH(**(output)))															\
-	{																							\
-		int x0 = 0, x1 = 0, ismax;																\
-		FOREACH(l0, len0)																		\
-			FOREACH(l1, len1)																	\
-		{																						\
-			ismax = input[i][o0*len0 + l0][o1*len1 + l1] > input[i][o0*len0 + x0][o1*len1 + x1];\
-			x0 += ismax * (l0 - x0);															\
-			x1 += ismax * (l1 - x1);															\
-		}																						\
-		output[i][o0][o1] = input[i][o0*len0 + x0][o1*len1 + x1];								\
-	}																							\
+#define SUBSAMP_MAX_FORWARD(input,output)								\
+{																		\
+	FOREACH(i,GETLENGTH(output))										\
+		subsamp_max_forward((double *)input[i],(double *)output[i],		\
+								GETLENGTH(*input),GETLENGTH(**input),	\
+								GETLENGTH(*output),GETLENGTH(**output));\
 }
 
-#define SUBSAMP_MAX_BACKWARD(input,inerror,outerror)											\
-{																								\
-	const int len0 = GETLENGTH(*(inerror)) / GETLENGTH(*(outerror));							\
-	const int len1 = GETLENGTH(**(inerror)) / GETLENGTH(**(outerror));							\
-	FOREACH(i, GETLENGTH(outerror))																\
-	FOREACH(o0, GETLENGTH(*(outerror)))															\
-	FOREACH(o1, GETLENGTH(**(outerror)))														\
-	{																							\
-		int x0 = 0, x1 = 0, ismax;																\
-		FOREACH(l0, len0)																		\
-			FOREACH(l1, len1)																	\
-		{																						\
-			ismax = input[i][o0*len0 + l0][o1*len1 + l1] > input[i][o0*len0 + x0][o1*len1 + x1];\
-			x0 += ismax * (l0 - x0);															\
-			x1 += ismax * (l1 - x1);															\
-		}																						\
-		inerror[i][o0*len0 + x0][o1*len1 + x1] = outerror[i][o0][o1];							\
-	}																							\
+#define SUBSAMP_MAX_BACKWARD(input,inerror,outerror)										\
+{																							\
+	FOREACH(i, GETLENGTH(outerror))															\
+		subsamp_max_backward((double *)input[i],(double *)outerror[i],(double *)inerror[i],	\
+								GETLENGTH(*outerror),GETLENGTH(**outerror),					\
+								GETLENGTH(*inerror),GETLENGTH(**inerror));					\
 }
 
 #define DOT_PRODUCT_FORWARD(input,output,weight,bias,action)				\
 {																			\
-	for (int x = 0; x < GETLENGTH(weight); ++x)								\
-		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
-			((double *)output)[y] += ((double *)input)[x] * weight[x][y];	\
+	vector_x_matrix((double *)input,(double *)weight,(double *)output,GETLENGTH(weight),GETLENGTH(*weight));\
 	FOREACH(j, GETLENGTH(bias))												\
 		((double *)output)[j] = action(((double *)output)[j] + bias[j]);	\
 }
 
-#define DOT_PRODUCT_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)	\
-{																				\
-	for (int x = 0; x < GETLENGTH(weight); ++x)									\
-		for (int y = 0; y < GETLENGTH(*weight); ++y)							\
-			((double *)inerror)[x] += ((double *)outerror)[y] * weight[x][y];	\
+#define DOT_PRODUCT_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)									\
+{																												\
+	matrix_x_vector((double *)weight,(double *)outerror,(double *)inerror,GETLENGTH(weight),GETLENGTH(*weight));\
 	FOREACH(i, GETCOUNT(inerror))												\
 		((double *)inerror)[i] *= actiongrad(((double *)input)[i]);				\
 	FOREACH(j, GETLENGTH(outerror))												\
