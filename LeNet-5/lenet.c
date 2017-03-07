@@ -56,78 +56,40 @@ static void matrix_x_vector(double *mat, double *src, double *des, const long he
 	}
 }
 
-//static void subsamp_max_forward(double *src, double *des, const long sh, const long sw, const long dh, const long dw)
-//{
-//	const long lh = sh / dh, lw = sw / dw;
-//	for (long d0 = 0; d0 < dh; ++d0)
-//		for (long d1 = 0; d1 < dw; ++d1)
-//		{
-//			long x = d0 * lh * sw + d1 * lw;
-//			for (long l = 1; l < lh * lw; ++l)
-//			{
-//				long index = (d0 * lh + l / lw) * sw + d1 * lw + l % lw;
-//				x += (src[index] > src[x]) * (index - x);
-//			}
-//			des[d0 * dw + d1] = src[x];
-//		}
-//}
-
-//static void subsamp_max_backward(double *desl, double *src, double *des, const long sh, const long sw, const long dh, const long dw)
-//{
-//	const long lh = dh / sh, lw = dw / sw;
-//	for (long s0 = 0; s0 < sh; ++s0)
-//		for (long s1 = 0; s1 < sw; ++s1)
-//		{
-//			long x = s0 * lh * dw + s1 * lw;
-//			for (long l = 1; l < lh * lw; ++l)
-//			{
-//				long index = (s0 * lh + l / lw) * dw + s1 * lw + l % lw;
-//				x += (desl[index] > desl[x]) * (index - x);
-//			}
-//			des[x] = src[s0 * sw + s1];
-//		}
-//}
-
-
-#define GETLENGTH(array) (sizeof(array)/sizeof(*(array)))
-
-#define GETCOUNT(array)  (sizeof(array)/sizeof(double))
-
-#define FOREACH(i,count) for (int i = 0; i < count; ++i)
-
-#define CONVOLUTE_VALID(input,output,weight)											\
-{																						\
-	convolute_valid((double *)input,(double *)weight,(double *)output,GETLENGTH(output),GETLENGTH(*output),GETLENGTH(weight),GETLENGTH(*weight));\
+static void convolution_forward(double *src, double *conv, double *des,double *bias,double(*active)(double), const long dh, const long dw, const long ch, const long cw, const long sn, const long dn)
+{
+	const long srcSize = (dh + ch - 1) * (dw + cw - 1), desSize = dh * dw, convSize = ch * cw;
+	for (int y = 0; y < dn; ++y)
+		for (int x = 0; x < sn; ++x)
+			convolute_valid(src + x * srcSize, conv + (x * dn + y)*convSize, des + y*desSize, dh, dw, ch, cw);
+	for (int i = 0; i < dn; ++i)
+	{
+		double *desMat = des + i * desSize;
+		for (int j = 0; j < desSize; ++j)
+		{
+			desMat[j] = active(desMat[j] + bias[i]);
+		}
+	}
 }
 
-#define CONVOLUTE_FULL(input,output,weight)												\
-{																						\
-	convolute_full((double *)input,(double *)weight,(double *)output,GETLENGTH(input),GETLENGTH(*input),GETLENGTH(weight),GETLENGTH(*weight)); \
-}
-
-#define CONVOLUTION_FORWARD(input,output,weight,bias,action)					\
-{																				\
-	for (int x = 0; x < GETLENGTH(weight); ++x)									\
-		for (int y = 0; y < GETLENGTH(*weight); ++y)							\
-			CONVOLUTE_VALID(input[x], output[y], weight[x][y]);					\
-	FOREACH(j, GETLENGTH(output))												\
-		FOREACH(i, GETCOUNT(output[j]))											\
-		((double *)output[j])[i] = action(((double *)output[j])[i] + bias[j]);	\
-}
-
-#define CONVOLUTION_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)\
-{																			\
-	for (int x = 0; x < GETLENGTH(weight); ++x)								\
-		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
-			CONVOLUTE_FULL(outerror[y], inerror[x], weight[x][y]);			\
-	FOREACH(i, GETCOUNT(inerror))											\
-		((double *)inerror)[i] *= actiongrad(((double *)input)[i]);			\
-	FOREACH(j, GETLENGTH(outerror))											\
-		FOREACH(i, GETCOUNT(outerror[j]))									\
-		bd[j] += ((double *)outerror[j])[i];								\
-	for (int x = 0; x < GETLENGTH(weight); ++x)								\
-		for (int y = 0; y < GETLENGTH(*weight); ++y)						\
-			CONVOLUTE_VALID(input[x], wd[x][y], outerror[y]);				\
+static void convolution_backward(double *src, double *conv, double *des, double *desl, double *wd, double *bd, double(*activegrad)(double), const long sh, const long sw, const long ch, const long cw, const long sn, const long dn)
+{
+	const long srcSize = sh * sw, desSize = (sh + ch - 1) * (sw + cw - 1), convSize = ch * cw;
+	for (int x = 0; x < dn; ++x)
+		for (int y = 0; y < sn; ++y)
+		{
+			convolute_full(src + y*srcSize, conv + (x*sn + y)*convSize, des + x*desSize, sh, sw, ch, cw);
+		}
+	for (int i = 0; i < desSize * dn; ++i)
+		des[i] *= activegrad(desl[i]);
+	for (int i = 0; i < sn; ++i)
+		for (int j = 0; j < srcSize; ++j)
+			bd[i] += src[i * srcSize + j];
+	for (int x = 0; x < dn; ++x)
+		for (int y = 0; y < sn; ++y)
+		{
+			convolute_valid(desl + x *desSize, src + y *srcSize, wd + (x*sn + y)*convSize, ch, cw, sh, sw);
+		}
 }
 
 static void subsamp_max_forward(double *src, double *des, const long sh, const long sw, const long dh, const long dw, const long n)
@@ -182,6 +144,21 @@ static void dot_product_forward(double *src, double *mat, double *des,double *bi
 		des[i] = active(des[i] + bias[i]);
 }
 
+static void dot_product_backward(double *src, double *mat, double *des, double *desl, double *wd, double *bd, double(*activegrad)(double), const long height, const long width)
+{
+	matrix_x_vector(mat, src, des, height, width);
+	for (int i = 0; i < height; ++i)
+		des[i] *= activegrad(desl[i]);
+	for (int i = 0; i < width; ++i)
+		bd[i] += src[i];
+	for (int x = 0; x < height; ++x)
+		for (int y = 0; y < width; ++y)
+			wd[x * width + y] += desl[x] * src[y];
+}
+
+#define GETLENGTH(array) (sizeof(array)/sizeof(*(array)))
+
+#define GETCOUNT(array)  (sizeof(array)/sizeof(double))
 
 #define SUBSAMP_MAX_FORWARD(input,output)								\
 {																		\
@@ -203,23 +180,30 @@ static void dot_product_forward(double *src, double *mat, double *des,double *bi
 				(double *)bias,action,GETLENGTH(weight),GETLENGTH(*weight));\
 }
 
-static void dot_product_backward(double *src, double *mat, double *des, double *desl, double *wd, double *bd, double(*activegrad)(double), const long height, const long width)
-{
-	matrix_x_vector(mat, src, des, height, width);
-	for (int i = 0; i < height; ++i)
-		des[i] *= activegrad(desl[i]);
-	for (int i = 0; i < width; ++i)
-		bd[i] += src[i];
-	for (int x = 0; x < height; ++x)							
-		for (int y = 0; y < width; ++y)					
-			wd[x * width + y] += desl[x] * src[y];
-}
 
 
-#define DOT_PRODUCT_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)									\
-{																												\
-	dot_product_backward((double *)outerror,(double *)weight,(double *)inerror,(double *)input,(double *)wd,(double *)bd,actiongrad,GETLENGTH(weight),GETLENGTH(*weight));\
+#define DOT_PRODUCT_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)	\
+{																				\
+	dot_product_backward((double *)outerror,(double *)weight,(double *)inerror,	\
+						(double *)input,(double *)wd,(double *)bd,actiongrad,	\
+							GETLENGTH(weight),GETLENGTH(*weight));				\
 }
+
+#define CONVOLUTION_FORWARD(input,output,weight,bias,action)								\
+{																							\
+	convolution_forward((double *)input,(double *)weight,(double *)output,(double *)bias,	\
+			action,GETLENGTH(*output),GETLENGTH(**output),GETLENGTH(**weight),				\
+				GETLENGTH(***weight),GETLENGTH(weight),GETLENGTH(*weight));					\
+}
+
+#define CONVOLUTION_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)			\
+{																						\
+	convolution_backward((double *)outerror,(double *)weight,(double *)inerror,			\
+						(double *)input,(double *)wd,(double *)bd,actiongrad,			\
+						GETLENGTH(*outerror),GETLENGTH(**outerror),GETLENGTH(**weight),	\
+						GETLENGTH(***weight),GETLENGTH(*weight),GETLENGTH(weight));		\
+}
+
 
 double relu(double x)
 {
@@ -256,16 +240,16 @@ static inline void load_input(Feature *features, image input)
 	double (*layer0)[LENGTH_FEATURE0][LENGTH_FEATURE0] = features->input;
 	const long sz = sizeof(image) / sizeof(**input);
 	double mean = 0, std = 0;
-	FOREACH(j, sizeof(image) / sizeof(*input))
-		FOREACH(k, sizeof(*input) / sizeof(**input))
+	for(int j = 0; j < sizeof(image) / sizeof(*input); ++j)
+		for(int k = 0; k < sizeof(*input) / sizeof(**input); ++k)
 	{
 		mean += input[j][k];
 		std += input[j][k] * input[j][k];
 	}
 	mean /= sz;
 	std = sqrt(std / sz - mean*mean);
-	FOREACH(j, sizeof(image) / sizeof(*input))
-		FOREACH(k, sizeof(*input) / sizeof(**input))
+	for(int j = 0; j < sizeof(image) / sizeof(*input); ++j)
+		for(int k = 0; k < sizeof(*input) / sizeof(**input); ++k)
 	{
 		layer0[0][j + PADDING][k + PADDING] = (input[j][k] - mean) / std;
 	}
@@ -317,12 +301,12 @@ void TrainBatch(LeNet5 *lenet, image *inputs, uint8 *labels, int batchSize)
 		backward(lenet, &deltas, &errors, &features, relugrad);
 		#pragma omp critical
 		{
-			FOREACH(j, GETCOUNT(LeNet5))
+			for(int j = 0;j < GETCOUNT(LeNet5); ++j)
 				buffer[j] += ((double *)&deltas)[j];
 		}
 	}
 	double k = ALPHA / batchSize;
-	FOREACH(i, GETCOUNT(LeNet5))
+	for(int i = 0; i < GETCOUNT(LeNet5); ++i)
 		((double *)lenet)[i] += k * buffer[i];
 }
 
@@ -335,7 +319,7 @@ void Train(LeNet5 *lenet, image input, uint8 label)
 	forward(lenet, &features, relu);
 	softmax(features.output, errors.output, label, GETCOUNT(features.output));
 	backward(lenet, &deltas, &errors, &features, relugrad);
-	FOREACH(i, GETCOUNT(LeNet5))
+	for(int i = 0; i < GETCOUNT(LeNet5); ++i)
 		((double *)lenet)[i] += ALPHA * ((double *)&deltas)[i];
 }
 
