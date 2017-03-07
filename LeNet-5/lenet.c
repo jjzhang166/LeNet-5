@@ -56,37 +56,37 @@ static void matrix_x_vector(double *mat, double *src, double *des, const long he
 	}
 }
 
-static void subsamp_max_forward(double *src, double *des, const long sh, const long sw, const long dh, const long dw)
-{
-	const long lh = sh / dh, lw = sw / dw;
-	for (long d0 = 0; d0 < dh; ++d0)
-		for (long d1 = 0; d1 < dw; ++d1)
-		{
-			long x = d0 * lh * sw + d1 * lw;
-			for (long l = 1; l < lh * lw; ++l)
-			{
-				long index = (d0 * lh + l / lw) * sw + d1 * lw + l % lw;
-				x += (src[index] > src[x]) * (index - x);
-			}
-			des[d0 * dw + d1] = src[x];
-		}
-}
+//static void subsamp_max_forward(double *src, double *des, const long sh, const long sw, const long dh, const long dw)
+//{
+//	const long lh = sh / dh, lw = sw / dw;
+//	for (long d0 = 0; d0 < dh; ++d0)
+//		for (long d1 = 0; d1 < dw; ++d1)
+//		{
+//			long x = d0 * lh * sw + d1 * lw;
+//			for (long l = 1; l < lh * lw; ++l)
+//			{
+//				long index = (d0 * lh + l / lw) * sw + d1 * lw + l % lw;
+//				x += (src[index] > src[x]) * (index - x);
+//			}
+//			des[d0 * dw + d1] = src[x];
+//		}
+//}
 
-static void subsamp_max_backward(double *desl, double *src, double *des, const long sh, const long sw, const long dh, const long dw)
-{
-	const long lh = dh / sh, lw = dw / sw;
-	for (long s0 = 0; s0 < sh; ++s0)
-		for (long s1 = 0; s1 < sw; ++s1)
-		{
-			long x = s0 * lh * dw + s1 * lw;
-			for (long l = 1; l < lh * lw; ++l)
-			{
-				long index = (s0 * lh + l / lw) * dw + s1 * lw + l % lw;
-				x += (desl[index] > desl[x]) * (index - x);
-			}
-			des[x] = src[s0 * sw + s1];
-		}
-}
+//static void subsamp_max_backward(double *desl, double *src, double *des, const long sh, const long sw, const long dh, const long dw)
+//{
+//	const long lh = dh / sh, lw = dw / sw;
+//	for (long s0 = 0; s0 < sh; ++s0)
+//		for (long s1 = 0; s1 < sw; ++s1)
+//		{
+//			long x = s0 * lh * dw + s1 * lw;
+//			for (long l = 1; l < lh * lw; ++l)
+//			{
+//				long index = (s0 * lh + l / lw) * dw + s1 * lw + l % lw;
+//				x += (desl[index] > desl[x]) * (index - x);
+//			}
+//			des[x] = src[s0 * sw + s1];
+//		}
+//}
 
 
 #define GETLENGTH(array) (sizeof(array)/sizeof(*(array)))
@@ -130,21 +130,64 @@ static void subsamp_max_backward(double *desl, double *src, double *des, const l
 			CONVOLUTE_VALID(input[x], wd[x][y], outerror[y]);				\
 }
 
+static void subsamp_max_forward(double *src, double *des, const long sh, const long sw, const long dh, const long dw, const long n)
+{
+	const long srcSize = sh * sw, desSize = dh * dw;
+	const long lh = sh / dh, lw = sw / dw;
+	for (long i = 0; i < n; ++i)
+	{
+		for (long d0 = 0; d0 < dh; ++d0)
+			for (long d1 = 0; d1 < dw; ++d1)
+			{
+				long x = d0 * lh * sw + d1 * lw;
+				for (long l = 1; l < lh * lw; ++l)
+				{
+					long index = (d0 * lh + l / lw) * sw + d1 * lw + l % lw;
+					x += (src[index] > src[x]) * (index - x);
+				}
+				des[d0 * dw + d1] = src[x];
+			}
+		src += srcSize;
+		des += desSize;
+	}
+}
+
+static void subsamp_max_backward(double *desl, double *src, double *des, const long sh, const long sw, const long dh, const long dw, const long n)
+{
+	const long srcSize = sh * sw, desSize = dh * dw;
+	const long lh = dh / sh, lw = dw / sw;
+	for (long i = 0; i < n; ++i)
+	{
+		for (long s0 = 0; s0 < sh; ++s0)
+			for (long s1 = 0; s1 < sw; ++s1)
+			{
+				long x = s0 * lh * dw + s1 * lw;
+				for (long l = 1; l < lh * lw; ++l)
+				{
+					long index = (s0 * lh + l / lw) * dw + s1 * lw + l % lw;
+					x += (desl[index] > desl[x]) * (index - x);
+				}
+				des[x] = src[s0 * sw + s1];
+			}
+		src += srcSize;
+		des += desSize;
+		desl += desSize;
+	}
+}
+
 
 #define SUBSAMP_MAX_FORWARD(input,output)								\
 {																		\
-	FOREACH(i,GETLENGTH(output))										\
-		subsamp_max_forward((double *)input[i],(double *)output[i],		\
-								GETLENGTH(*input),GETLENGTH(**input),	\
-								GETLENGTH(*output),GETLENGTH(**output));\
+	subsamp_max_forward((double *)input,(double *)output,				\
+							GETLENGTH(*input),GETLENGTH(**input),		\
+							GETLENGTH(*output),GETLENGTH(**output),GETLENGTH(output));\
 }
 
 #define SUBSAMP_MAX_BACKWARD(input,inerror,outerror)										\
 {																							\
-	FOREACH(i, GETLENGTH(outerror))															\
-		subsamp_max_backward((double *)input[i],(double *)outerror[i],(double *)inerror[i],	\
-								GETLENGTH(*outerror),GETLENGTH(**outerror),					\
-								GETLENGTH(*inerror),GETLENGTH(**inerror));					\
+	subsamp_max_backward((double *)input,(double *)outerror,(double *)inerror,				\
+							GETLENGTH(*outerror),GETLENGTH(**outerror),						\
+							GETLENGTH(*inerror),GETLENGTH(**inerror), GETLENGTH(outerror));	\
 }
 
 #define DOT_PRODUCT_FORWARD(input,output,weight,bias,action)				\
@@ -294,7 +337,7 @@ uint8 Predict(LeNet5 *lenet, image input,uint8 count)
 
 void Initial(LeNet5 *lenet)
 {
-	srand((unsigned)time(0));
+	//srand((unsigned)time(0));
 	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->bias0_1; *pos++ = rand()*(2. / RAND_MAX) - 1);
 	for (double *pos = (double *)lenet->weight0_1; pos < (double *)lenet->weight2_3; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL * LENGTH_KERNEL * (INPUT + LAYER1))));
 	for (double *pos = (double *)lenet->weight2_3; pos < (double *)lenet->weight4_5; *pos++ *= sqrt(6.0 / (LENGTH_KERNEL * LENGTH_KERNEL * (LAYER2 + LAYER3))));
