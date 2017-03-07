@@ -175,6 +175,13 @@ static void subsamp_max_backward(double *desl, double *src, double *des, const l
 	}
 }
 
+static void dot_product_forward(double *src, double *mat, double *des,double *bias, double(*active)(double), const long height, const long width)
+{
+	vector_x_matrix(src, mat, des, height, width);
+	for (int i = 0; i < width; ++i)
+		des[i] = active(des[i] + bias[i]);
+}
+
 
 #define SUBSAMP_MAX_FORWARD(input,output)								\
 {																		\
@@ -192,21 +199,26 @@ static void subsamp_max_backward(double *desl, double *src, double *des, const l
 
 #define DOT_PRODUCT_FORWARD(input,output,weight,bias,action)				\
 {																			\
-	vector_x_matrix((double *)input,(double *)weight,(double *)output,GETLENGTH(weight),GETLENGTH(*weight));\
-	FOREACH(j, GETLENGTH(bias))												\
-		((double *)output)[j] = action(((double *)output)[j] + bias[j]);	\
+	dot_product_forward((double *)input,(double *)weight,(double *)output,	\
+				(double *)bias,action,GETLENGTH(weight),GETLENGTH(*weight));\
 }
+
+static void dot_product_backward(double *src, double *mat, double *des, double *desl, double *wd, double *bd, double(*activegrad)(double), const long height, const long width)
+{
+	matrix_x_vector(mat, src, des, height, width);
+	for (int i = 0; i < height; ++i)
+		des[i] *= activegrad(desl[i]);
+	for (int i = 0; i < width; ++i)
+		bd[i] += src[i];
+	for (int x = 0; x < height; ++x)							
+		for (int y = 0; y < width; ++y)					
+			wd[x * width + y] += desl[x] * src[y];
+}
+
 
 #define DOT_PRODUCT_BACKWARD(input,inerror,outerror,weight,wd,bd,actiongrad)									\
 {																												\
-	matrix_x_vector((double *)weight,(double *)outerror,(double *)inerror,GETLENGTH(weight),GETLENGTH(*weight));\
-	FOREACH(i, GETCOUNT(inerror))												\
-		((double *)inerror)[i] *= actiongrad(((double *)input)[i]);				\
-	FOREACH(j, GETLENGTH(outerror))												\
-		bd[j] += ((double *)outerror)[j];										\
-	for (int x = 0; x < GETLENGTH(weight); ++x)									\
-		for (int y = 0; y < GETLENGTH(*weight); ++y)							\
-			wd[x][y] += ((double *)input)[x] * ((double *)outerror)[y];			\
+	dot_product_backward((double *)outerror,(double *)weight,(double *)inerror,(double *)input,(double *)wd,(double *)bd,actiongrad,GETLENGTH(weight),GETLENGTH(*weight));\
 }
 
 double relu(double x)
